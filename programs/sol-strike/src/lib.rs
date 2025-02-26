@@ -2,6 +2,8 @@ use anchor_lang::{prelude::*, solana_program::native_token::{sol_to_lamports, LA
 
 declare_id!("3FFYCYGMqkjjpxMvGXu5XiRnZQtGJMN9r73Hh1yiBVjH");
 
+const ANCHOR_DISCRIMINATOR: usize = 8;
+
 #[constant]
 const CHIP_PRICE :u64 = (LAMPORTS_PER_SOL as f64 * 0.01) as u64;
 
@@ -9,7 +11,11 @@ const CHIP_PRICE :u64 = (LAMPORTS_PER_SOL as f64 * 0.01) as u64;
 pub mod sol_strike {
     use super::*;
 
-    pub fn add_token(ctx: Context<AddToken>) -> Result<()> {
+    pub fn add_token(ctx: Context<AddToken>, token_address: Pubkey, token_price: u64) -> Result<()> {
+        let chip_token_price_state = &mut ctx.accounts.chip_token_price_state;
+        chip_token_price_state.token_address = token_address;
+        chip_token_price_state.token_price = token_price;
+        chip_token_price_state.bump = ctx.bumps.chip_token_price_state;
         Ok(())
     }
 
@@ -36,13 +42,30 @@ pub struct GlobalConfigState {
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct ChipTokenPriceState {
     pub token_address: Pubkey,
-    pub token_price: u64
+    pub token_price: u64,
+    pub bump: u8,
 }
 
 #[derive(Accounts)] 
-pub struct AddToken {}
+#[instruction(token_address: Pubkey)]
+pub struct AddToken<'info> {
+    #[account(
+        init,
+        payer = signer,
+        space = ANCHOR_DISCRIMINATOR + ChipTokenPriceState::INIT_SPACE,
+        seeds = [b"chip_token_price", token_address.key().as_ref()],
+        bump
+    )]
+    pub chip_token_price_state: Account<'info, ChipTokenPriceState>,
+    #[account(
+        mut
+    )]
+    pub signer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
 
 #[derive(Accounts)]
 pub struct BuyChip {}
