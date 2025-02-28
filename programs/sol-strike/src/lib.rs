@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*, solana_program::native_token::{sol_to_lamports, LAMPORTS_PER_SOL}};
+use anchor_lang::{prelude::*, solana_program::native_token::{LAMPORTS_PER_SOL}};
 
 declare_id!("3FFYCYGMqkjjpxMvGXu5XiRnZQtGJMN9r73Hh1yiBVjH");
 
@@ -12,9 +12,9 @@ pub mod sol_strike {
     use super::*;
 
     pub fn initalize_global_config(ctx: Context<InitializeGlobalConfig>, lamport_price: u64) -> Result<()> {
-        let global_config_state = &mut ctx.accounts.initalize_global_config;
+        let global_config_state = &mut ctx.accounts.global_config;
         global_config_state.lamport_price = lamport_price;
-        global_config_state.bump = ctx.bumps.initalize_global_config;
+        global_config_state.bump = ctx.bumps.global_config;
         Ok(())
     }
 
@@ -35,10 +35,14 @@ pub mod sol_strike {
     }
 
     pub fn update_chip_lamports_price(ctx: Context<UpdateChipLamportsPrice>, new_lamports_price: u64) -> Result<()> {
+        let global_config_state = &mut ctx.accounts.global_config;
+        global_config_state.lamport_price = new_lamports_price;
         Ok(())
     }
 
     pub fn update_chip_token_price(ctx: Context<UpdateChipTokenPrice>, token_address: Pubkey, new_token_price: u64) -> Result<()> {
+        let chip_token_price_state = &mut ctx.accounts.chip_token_price_state;
+        chip_token_price_state.token_price = new_token_price;
         Ok(())
     }
 }
@@ -64,10 +68,10 @@ pub struct InitializeGlobalConfig<'info> {
         init,
         payer = signer,
         space = ANCHOR_DISCRIMINATOR + GlobalConfigState::INIT_SPACE,
-        seeds = [b"GLOBAL_CONFIG_STATE"],
+        seeds = [b"GLOBAL_CONFIG"],
         bump
     )]
-    pub initalize_global_config: Account<'info, GlobalConfigState>,
+    pub global_config: Account<'info, GlobalConfigState>,
     #[account(
         mut
     )]
@@ -100,7 +104,30 @@ pub struct BuyChip {}
 pub struct SellChip {}
 
 #[derive(Accounts)]
-pub struct UpdateChipTokenPrice {}
+#[instruction(token_address: Pubkey)]
+pub struct UpdateChipTokenPrice<'info> {
+    #[account(
+        mut,
+        seeds = [b"CHIP_TOKEN_PRICE", token_address.key().as_ref()],
+        bump = chip_token_price_state.bump
+    )]
+    pub chip_token_price_state: Account<'info, ChipTokenPriceState>,
+    #[account(
+        mut
+    )]
+    pub signer: Signer<'info>
+}
 
 #[derive(Accounts)]
-pub struct UpdateChipLamportsPrice {}
+pub struct UpdateChipLamportsPrice<'info> {
+    #[account(
+        mut,
+        seeds = [b"GLOBAL_CONFIG"],
+        bump = global_config.bump
+    )]
+    pub global_config: Account<'info, GlobalConfigState>,
+    #[account(
+        mut
+    )]
+    pub signer: Signer<'info>
+}
