@@ -29,11 +29,8 @@ pub mod sol_strike {
         let chip_token_price_state = &ctx.accounts.chip_token_price_state;
         let chip_price = chip_token_price_state.token_price;
 
-        // calculate price in tokens which the buyer is paying with
         let total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
 
-        // debit buyers account and transfer to our treasury
-        // CHECK if its done this way
         let transfer_accounts = TransferChecked {
             from: ctx.accounts.buyer_token_account.to_account_info(),
             to: ctx.accounts.treasury_token_account.to_account_info(),
@@ -42,10 +39,8 @@ pub mod sol_strike {
         };
 
         let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), transfer_accounts);
-        // https://docs.rs/anchor-spl/latest/anchor_spl/token/fn.transfer_checked.html , decimals, da li nam treba? ako ne samo obican transfer
-        token::transfer_checked(cpi_ctx, total_payment, 9)?;
+        token::transfer_checked(cpi_ctx, total_payment, ctx.accounts.payment_token_mint.decimals)?;
 
-        // mint the chips to user
         let mint_accounts = MintTo {
             mint: ctx.accounts.chip_mint.to_account_info(),
             to: ctx.accounts.buyer_chip_account.to_account_info(),
@@ -56,7 +51,7 @@ pub mod sol_strike {
         token::mint_to(cpi_ctx, amount)?;
     
         msg!(
-            "✅ Successfully bought {} CHIP tokens for {} payment tokens.",
+            "Successfully bought {} CHIP tokens for {} payment tokens.",
             amount,
             total_payment
         );
@@ -175,7 +170,11 @@ pub struct BuyChip<'info> {
     )]
     pub buyer_chip_account: Account<'info, TokenAccount>,
     // CHECK THE buyer_token_account constraints, 
-    #[account(mut)]
+    #[account(
+        mut,
+        associated_token::mint = payment_token_mint,
+        associated_token::authority = buyer
+    )]
     pub buyer_token_account: Account<'info, TokenAccount>,
     pub payment_token_mint: Account<'info, Mint>,    
     pub token_program: Program<'info, Token>,
