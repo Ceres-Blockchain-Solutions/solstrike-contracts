@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*, solana_program::native_token::{LAMPORTS_PER_SOL}};
+use anchor_lang::prelude::*;
 use anchor_spl::{associated_token::AssociatedToken, token::{self, Mint, MintTo, Token, TokenAccount, Transfer}};
 
 declare_id!("3FFYCYGMqkjjpxMvGXu5XiRnZQtGJMN9r73Hh1yiBVjH");
@@ -7,6 +7,8 @@ const ANCHOR_DISCRIMINATOR: usize = 8;
 
 #[program]
 pub mod sol_strike {
+    use anchor_spl::token::TransferChecked;
+
     use super::*;
 
     pub fn initalize(ctx: Context<Initialize>) -> Result<()> {
@@ -24,6 +26,41 @@ pub mod sol_strike {
     }
 
     pub fn buy_chip(ctx: Context<BuyChip>, amount: u64) -> Result<()> {
+        let chip_token_price_state = &ctx.accounts.chip_token_price_state;
+        let chip_price = chip_token_price_state.token_price;
+
+        // calculate price in tokens which the buyer is paying with
+        let total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
+
+        // debit buyers account and transfer to our treasury
+        // CHECK if its done this way
+        let transfer_accounts = TransferChecked {
+            from: ctx.accounts.buyer_token_account.to_account_info(),
+            to: ctx.accounts.treasury_token_account.to_account_info(),
+            authority: ctx.accounts.buyer.to_account_info(),
+            mint: ctx.accounts.payment_token_mint.to_account_info(),
+        };
+
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), transfer_accounts);
+        // https://docs.rs/anchor-spl/latest/anchor_spl/token/fn.transfer_checked.html , decimals, da li nam treba? ako ne samo obican transfer
+        token::transfer_checked(cpi_ctx, total_payment, 9)?;
+
+        // mint the chips to user
+        let mint_accounts = MintTo {
+            mint: ctx.accounts.chip_mint.to_account_info(),
+            to: ctx.accounts.buyer_chip_account.to_account_info(),
+            authority: ctx.accounts.treasury.to_account_info(),
+        };
+    
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), mint_accounts);
+        token::mint_to(cpi_ctx, amount)?;
+    
+        msg!(
+            "✅ Successfully bought {} CHIP tokens for {} payment tokens.",
+            amount,
+            total_payment
+        );
+
         Ok(())
     }
 
@@ -137,6 +174,7 @@ pub struct BuyChip<'info> {
         associated_token::authority = buyer
     )]
     pub buyer_chip_account: Account<'info, TokenAccount>,
+    // CHECK THE buyer_token_account constraints, 
     #[account(mut)]
     pub buyer_token_account: Account<'info, TokenAccount>,
     pub payment_token_mint: Account<'info, Mint>,    
@@ -159,4 +197,9 @@ pub struct UpdateChipTokenPrice<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     pub token_mint: Account<'info, Mint>
+}
+
+#[error_code]
+pub enum Errors {
+    Overflow,
 }
