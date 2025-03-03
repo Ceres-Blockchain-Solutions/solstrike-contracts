@@ -1,20 +1,17 @@
 use anchor_lang::{prelude::*, solana_program::native_token::{LAMPORTS_PER_SOL}};
+use anchor_spl::{associated_token::AssociatedToken, token::{self, Mint, MintTo, Token, TokenAccount, Transfer}};
 
 declare_id!("3FFYCYGMqkjjpxMvGXu5XiRnZQtGJMN9r73Hh1yiBVjH");
 
 const ANCHOR_DISCRIMINATOR: usize = 8;
 
-#[constant]
-const CHIP_PRICE :u64 = (LAMPORTS_PER_SOL as f64 * 0.01) as u64;
-
 #[program]
 pub mod sol_strike {
     use super::*;
 
-    pub fn initalize_global_config(ctx: Context<InitializeGlobalConfig>, lamport_price: u64) -> Result<()> {
-        let global_config_state = &mut ctx.accounts.global_config;
-        global_config_state.lamport_price = lamport_price;
-        global_config_state.bump = ctx.bumps.global_config;
+    pub fn initalize(ctx: Context<Initialize>) -> Result<()> {
+        let treasury = &mut ctx.accounts.treasury;
+        treasury.bump = ctx.bumps.treasury;
         Ok(())
     }
 
@@ -26,7 +23,7 @@ pub mod sol_strike {
         Ok(())
     }
 
-    pub fn buy_chip(ctx: Context<BuyChip>, amount: u64, payment_token: Pubkey) -> Result<()> {
+    pub fn buy_chip(ctx: Context<BuyChip>, amount: u64) -> Result<()> {
         Ok(())
     }
 
@@ -34,24 +31,11 @@ pub mod sol_strike {
         Ok(())
     }
 
-    pub fn update_chip_lamports_price(ctx: Context<UpdateChipLamportsPrice>, new_lamports_price: u64) -> Result<()> {
-        let global_config_state = &mut ctx.accounts.global_config;
-        global_config_state.lamport_price = new_lamports_price;
-        Ok(())
-    }
-
-    pub fn update_chip_token_price(ctx: Context<UpdateChipTokenPrice>, token_address: Pubkey, new_token_price: u64) -> Result<()> {
+    pub fn update_chip_token_price(ctx: Context<UpdateChipTokenPrice>, new_token_price: u64) -> Result<()> {
         let chip_token_price_state = &mut ctx.accounts.chip_token_price_state;
         chip_token_price_state.token_price = new_token_price;
         Ok(())
     }
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct GlobalConfigState {
-    pub lamport_price: u64,
-    pub bump: u8
 }
 
 #[account]
@@ -62,20 +46,34 @@ pub struct ChipTokenPriceState {
     pub bump: u8,
 }
 
+#[account]
+#[derive(InitSpace)]
+pub struct Treasury {
+    pub bump: u8
+}
+
 #[derive(Accounts)]
-pub struct InitializeGlobalConfig<'info> {
+pub struct Initialize<'info> {
     #[account(
         init,
         payer = signer,
-        space = ANCHOR_DISCRIMINATOR + GlobalConfigState::INIT_SPACE,
-        seeds = [b"GLOBAL_CONFIG"],
+        mint::decimals = 9,
+        mint::authority = chip_mint,
+        seeds = [b"CHIP_MINT"],
         bump
     )]
-    pub global_config: Account<'info, GlobalConfigState>,
+    pub chip_mint: Account<'info, Mint>,
     #[account(
-        mut
+        init,
+        payer = signer,
+        space = ANCHOR_DISCRIMINATOR + Treasury::INIT_SPACE,
+        seeds = [b"TREASURY"],
+        bump
     )]
+    pub treasury: Account<'info, Treasury>,
+    #[account(mut)]
     pub signer: Signer<'info>,
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>
 }
 
@@ -91,43 +89,74 @@ pub struct AddToken<'info> {
     )]
     pub chip_token_price_state: Account<'info, ChipTokenPriceState>,
     #[account(
-        mut
+        seeds = [b"TREASURY"],
+        bump = treasury.bump
     )]
+    pub treasury: Account<'info, Treasury>,
+    #[account(
+        init,
+        payer = signer,
+        associated_token::mint = payment_token_mint,
+        associated_token::authority = treasury
+    )]
+    pub treasury_token_account: Account<'info, TokenAccount>,
+    #[account(mut)]
     pub signer: Signer<'info>,
+    pub payment_token_mint: Account<'info, Mint>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct BuyChip {}
+pub struct BuyChip<'info> {
+    #[account(
+        seeds = [b"CHIP_TOKEN_PRICE", payment_token_mint.key().as_ref()],
+        bump = chip_token_price_state.bump
+    )]
+    pub chip_token_price_state: Account<'info, ChipTokenPriceState>,
+    #[account(mut)]
+    pub treasury: Account<'info, Treasury>,
+    #[account(
+        mut,
+        associated_token::mint = payment_token_mint,
+        associated_token::authority = treasury
+    )]
+    pub treasury_token_account: Account<'info, TokenAccount>, 
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+    #[account(
+        mut,
+        mint::authority = treasury
+    )]
+    pub chip_mint: Account<'info, Mint>, 
+    #[account(
+        init_if_needed,
+        payer = buyer,
+        associated_token::mint = chip_mint,
+        associated_token::authority = buyer
+    )]
+    pub buyer_chip_account: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub buyer_token_account: Account<'info, TokenAccount>,
+    pub payment_token_mint: Account<'info, Mint>,    
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>
+}
 
 #[derive(Accounts)]
 pub struct SellChip {}
 
 #[derive(Accounts)]
-#[instruction(token_address: Pubkey)]
 pub struct UpdateChipTokenPrice<'info> {
     #[account(
         mut,
-        seeds = [b"CHIP_TOKEN_PRICE", token_address.key().as_ref()],
+        seeds = [b"CHIP_TOKEN_PRICE", token_mint.key().as_ref()],
         bump = chip_token_price_state.bump
     )]
     pub chip_token_price_state: Account<'info, ChipTokenPriceState>,
-    #[account(
-        mut
-    )]
-    pub signer: Signer<'info>
-}
-
-#[derive(Accounts)]
-pub struct UpdateChipLamportsPrice<'info> {
-    #[account(
-        mut,
-        seeds = [b"GLOBAL_CONFIG"],
-        bump = global_config.bump
-    )]
-    pub global_config: Account<'info, GlobalConfigState>,
-    #[account(
-        mut
-    )]
-    pub signer: Signer<'info>
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub token_mint: Account<'info, Mint>
 }
