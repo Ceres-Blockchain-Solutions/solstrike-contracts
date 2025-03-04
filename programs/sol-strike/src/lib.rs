@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token::{self, Mint, MintTo, Token, TokenAccount, Transfer}};
+use anchor_spl::{associated_token::AssociatedToken, token::{self, Mint, MintTo, Token, TokenAccount}};
 
 declare_id!("3FFYCYGMqkjjpxMvGXu5XiRnZQtGJMN9r73Hh1yiBVjH");
 
@@ -11,7 +11,7 @@ pub mod sol_strike {
 
     use super::*;
 
-    pub fn initalize(ctx: Context<Initialize>) -> Result<()> {
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let treasury = &mut ctx.accounts.treasury;
         treasury.bump = ctx.bumps.treasury;
         Ok(())
@@ -41,13 +41,20 @@ pub mod sol_strike {
         let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), transfer_accounts);
         token::transfer_checked(cpi_ctx, total_payment, ctx.accounts.payment_token_mint.decimals)?;
 
+        let treasury_seeds: &[&[u8]] = &[
+            b"TREASURY",
+            &[ctx.accounts.treasury.bump], 
+        ];
+
+        let signer_seeds: &[&[&[u8]]] = &[&treasury_seeds];
+
         let mint_accounts = MintTo {
             mint: ctx.accounts.chip_mint.to_account_info(),
             to: ctx.accounts.buyer_chip_account.to_account_info(),
             authority: ctx.accounts.treasury.to_account_info(),
         };
     
-        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), mint_accounts);
+        let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), mint_accounts, signer_seeds);
         token::mint_to(cpi_ctx, amount)?;
     
         msg!(
@@ -121,6 +128,7 @@ pub struct AddToken<'info> {
     )]
     pub chip_token_price_state: Account<'info, ChipTokenPriceState>,
     #[account(
+        mut,
         seeds = [b"TREASURY"],
         bump = treasury.bump
     )]
