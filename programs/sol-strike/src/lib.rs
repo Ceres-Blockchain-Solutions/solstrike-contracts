@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token::{self, Mint, MintTo, Token, TokenAccount}};
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token_interface::{self, Mint, TokenAccount, MintTo, TokenInterface, TransferChecked};
 
 declare_id!("3FFYCYGMqkjjpxMvGXu5XiRnZQtGJMN9r73Hh1yiBVjH");
 
@@ -7,8 +8,6 @@ const ANCHOR_DISCRIMINATOR: usize = 8;
 
 #[program]
 pub mod sol_strike {
-    use anchor_spl::token::TransferChecked;
-
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
@@ -17,9 +16,9 @@ pub mod sol_strike {
         Ok(())
     }
 
-    pub fn add_token(ctx: Context<AddToken>, token_address: Pubkey, token_price: u64) -> Result<()> {
+    pub fn add_token(ctx: Context<AddToken>, token_price: u64) -> Result<()> {
         let chip_token_price_state = &mut ctx.accounts.chip_token_price_state;
-        chip_token_price_state.token_address = token_address;
+        chip_token_price_state.token_address = ctx.accounts.payment_token_mint.key();
         chip_token_price_state.token_price = token_price;
         chip_token_price_state.bump = ctx.bumps.chip_token_price_state;
         Ok(())
@@ -39,7 +38,7 @@ pub mod sol_strike {
         };
 
         let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), transfer_accounts);
-        token::transfer_checked(cpi_ctx, total_payment, ctx.accounts.payment_token_mint.decimals)?;
+        token_interface::transfer_checked(cpi_ctx, total_payment, ctx.accounts.payment_token_mint.decimals)?;
 
         let treasury_seeds: &[&[u8]] = &[
             b"TREASURY",
@@ -55,7 +54,7 @@ pub mod sol_strike {
         };
     
         let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), mint_accounts, signer_seeds);
-        token::mint_to(cpi_ctx, amount)?;
+        token_interface::mint_to(cpi_ctx, amount)?;
     
         msg!(
             "Successfully bought {} CHIP tokens for {} payment tokens.",
@@ -101,7 +100,7 @@ pub struct Initialize<'info> {
         seeds = [b"CHIP_MINT"],
         bump
     )]
-    pub chip_mint: Account<'info, Mint>,
+    pub chip_mint: InterfaceAccount<'info, Mint>,
     #[account(
         init,
         payer = signer,
@@ -112,18 +111,17 @@ pub struct Initialize<'info> {
     pub treasury: Account<'info, Treasury>,
     #[account(mut)]
     pub signer: Signer<'info>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>
 }
 
 #[derive(Accounts)] 
-#[instruction(token_address: Pubkey)]
 pub struct AddToken<'info> {
     #[account(
         init,
         payer = signer,
         space = ANCHOR_DISCRIMINATOR + ChipTokenPriceState::INIT_SPACE,
-        seeds = [b"CHIP_TOKEN_PRICE", token_address.key().as_ref()],
+        seeds = [payment_token_mint.key().as_ref()],
         bump
     )]
     pub chip_token_price_state: Account<'info, ChipTokenPriceState>,
@@ -137,13 +135,14 @@ pub struct AddToken<'info> {
         init,
         payer = signer,
         associated_token::mint = payment_token_mint,
-        associated_token::authority = treasury
+        associated_token::authority = treasury,
+        associated_token::token_program = token_program,
     )]
-    pub treasury_token_account: Account<'info, TokenAccount>,
+    pub treasury_token_account: InterfaceAccount<'info, TokenAccount>,
     #[account(mut)]
     pub signer: Signer<'info>,
-    pub payment_token_mint: Account<'info, Mint>,
-    pub token_program: Program<'info, Token>,
+    pub payment_token_mint: InterfaceAccount<'info, Mint>,
+    pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
@@ -162,30 +161,30 @@ pub struct BuyChip<'info> {
         associated_token::mint = payment_token_mint,
         associated_token::authority = treasury
     )]
-    pub treasury_token_account: Account<'info, TokenAccount>, 
+    pub treasury_token_account: InterfaceAccount<'info, TokenAccount>, 
     #[account(mut)]
     pub buyer: Signer<'info>,
     #[account(
         mut,
         mint::authority = treasury
     )]
-    pub chip_mint: Account<'info, Mint>, 
+    pub chip_mint: InterfaceAccount<'info, Mint>, 
     #[account(
         init_if_needed,
         payer = buyer,
         associated_token::mint = chip_mint,
         associated_token::authority = buyer
     )]
-    pub buyer_chip_account: Account<'info, TokenAccount>,
+    pub buyer_chip_account: InterfaceAccount<'info, TokenAccount>,
     // CHECK THE buyer_token_account constraints, 
     #[account(
         mut,
         associated_token::mint = payment_token_mint,
         associated_token::authority = buyer
     )]
-    pub buyer_token_account: Account<'info, TokenAccount>,
-    pub payment_token_mint: Account<'info, Mint>,    
-    pub token_program: Program<'info, Token>,
+    pub buyer_token_account: InterfaceAccount<'info, TokenAccount>,
+    pub payment_token_mint: InterfaceAccount<'info, Mint>,    
+    pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>
 }
@@ -203,7 +202,7 @@ pub struct UpdateChipTokenPrice<'info> {
     pub chip_token_price_state: Account<'info, ChipTokenPriceState>,
     #[account(mut)]
     pub signer: Signer<'info>,
-    pub token_mint: Account<'info, Mint>
+    pub token_mint: InterfaceAccount<'info, Mint>
 }
 
 #[error_code]
