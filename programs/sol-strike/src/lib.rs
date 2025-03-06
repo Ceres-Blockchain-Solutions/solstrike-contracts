@@ -150,7 +150,7 @@ pub struct AddToken<'info> {
 #[derive(Accounts)]
 pub struct BuyChip<'info> {
     #[account(
-        seeds = [b"CHIP_TOKEN_PRICE", payment_token_mint.key().as_ref()],
+        seeds = [payment_token_mint.key().as_ref()],
         bump = chip_token_price_state.bump
     )]
     pub chip_token_price_state: Account<'info, ChipTokenPriceState>,
@@ -196,7 +196,7 @@ pub struct SellChip {}
 pub struct UpdateChipTokenPrice<'info> {
     #[account(
         mut,
-        seeds = [b"CHIP_TOKEN_PRICE", token_mint.key().as_ref()],
+        seeds = [token_mint.key().as_ref()],
         bump = chip_token_price_state.bump
     )]
     pub chip_token_price_state: Account<'info, ChipTokenPriceState>,
