@@ -163,6 +163,89 @@ describe("sol-strike", () => {
   })
 
   it("Buy chip", async () => {
+    const usersMintsAndTokenAccounts = await createAccountsMintsAndTokenAccounts(
+      [
+        [1_000_000_000], 
+      ],
+      1 * LAMPORTS_PER_SOL,
+      provider.connection,
+      signer,
+    );
+
+    const user = usersMintsAndTokenAccounts.users[0]
+    const paymentTokeMint = usersMintsAndTokenAccounts.mints[0]
+    const userPaymentTokenAccount = usersMintsAndTokenAccounts.tokenAccounts[0][0]
+
+
+    const [treasuryPDA] = PublicKey.findProgramAddressSync(
+      [Buffer.from("TREASURY")],
+      program.programId
+    );
+
+    const [chipTokenPriceStatePDA] = PublicKey.findProgramAddressSync(
+      [paymentTokeMint.publicKey.toBuffer()],
+      program.programId
+    );
+
+    const treasuryAta = await getAssociatedTokenAddress(
+      paymentTokeMint.publicKey,
+      treasuryPDA,
+      true,
+      TOKEN_2022_PROGRAM_ID
+    )
+
+    await program.methods
+      .addToken(new BN(500))
+      .accountsStrict({
+        chipTokenPriceState: chipTokenPriceStatePDA,
+        treasury: treasuryPDA,
+        treasuryTokenAccount: treasuryAta,
+        signer: user.publicKey,
+        paymentTokenMint: paymentTokeMint.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SYSTEM_PROGRAM_ID,
+      })
+      .signers([user])
+      .rpc()
+
+    const [chipMintPDA] = PublicKey.findProgramAddressSync(
+      [Buffer.from("CHIP_MINT")],
+      program.programId
+    );
+
+    const buyerChipAccount = await getAssociatedTokenAddress(
+      chipMintPDA,
+      user.publicKey,
+      false,
+      TOKEN_2022_PROGRAM_ID
+    )
     
+    await program.methods
+      .buyChip(new BN(100))
+      .accountsStrict({
+        chipTokenPriceState: chipTokenPriceStatePDA,
+        treasury: treasuryPDA,
+        treasuryTokenAccount: treasuryAta,
+        buyer: user.publicKey,
+        chipMint: chipMintPDA,
+        buyerChipAccount: buyerChipAccount,
+        buyerTokenAccount: userPaymentTokenAccount,
+        paymentTokenMint: paymentTokeMint.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SYSTEM_PROGRAM_ID,
+      })
+      .signers([user])
+      .rpc()
+
+    const userAccountbalance = await provider.connection.getTokenAccountBalance(userPaymentTokenAccount)
+    const treasuryAccountBalance = await provider.connection.getTokenAccountBalance(treasuryAta)
+    const buyerChipAccountBalance = await provider.connection.getTokenAccountBalance(buyerChipAccount)
+
+
+    console.log("User balance: " + userAccountbalance.value.amount)
+    console.log("Treasury balance: " + treasuryAccountBalance.value.amount)
+    console.log("User chip balance: " + buyerChipAccountBalance.value.amount)
   })
 });

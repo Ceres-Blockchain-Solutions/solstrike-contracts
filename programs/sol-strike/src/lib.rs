@@ -40,17 +40,17 @@ pub mod sol_strike {
         let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), transfer_accounts);
         token_interface::transfer_checked(cpi_ctx, total_payment, ctx.accounts.payment_token_mint.decimals)?;
 
-        let treasury_seeds: &[&[u8]] = &[
-            b"TREASURY",
-            &[ctx.accounts.treasury.bump], 
+        let chip_mint_seeds: &[&[u8]] = &[
+            b"CHIP_MINT",
+            &[ctx.bumps.chip_mint], 
         ];
 
-        let signer_seeds: &[&[&[u8]]] = &[&treasury_seeds];
+        let signer_seeds: &[&[&[u8]]] = &[&chip_mint_seeds];
 
         let mint_accounts = MintTo {
             mint: ctx.accounts.chip_mint.to_account_info(),
             to: ctx.accounts.buyer_chip_account.to_account_info(),
-            authority: ctx.accounts.treasury.to_account_info(),
+            authority: ctx.accounts.chip_mint.to_account_info(),
         };
     
         let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), mint_accounts, signer_seeds);
@@ -159,28 +159,33 @@ pub struct BuyChip<'info> {
     #[account(
         mut,
         associated_token::mint = payment_token_mint,
-        associated_token::authority = treasury
+        associated_token::authority = treasury,
+        associated_token::token_program = token_program,
     )]
     pub treasury_token_account: InterfaceAccount<'info, TokenAccount>, 
     #[account(mut)]
     pub buyer: Signer<'info>,
     #[account(
         mut,
-        mint::authority = treasury
+        mint::authority = chip_mint,
+        seeds = [b"CHIP_MINT"],
+        bump
     )]
     pub chip_mint: InterfaceAccount<'info, Mint>, 
     #[account(
         init_if_needed,
         payer = buyer,
         associated_token::mint = chip_mint,
-        associated_token::authority = buyer
+        associated_token::authority = buyer,
+        associated_token::token_program = token_program,
     )]
     pub buyer_chip_account: InterfaceAccount<'info, TokenAccount>,
     // CHECK THE buyer_token_account constraints, 
     #[account(
         mut,
         associated_token::mint = payment_token_mint,
-        associated_token::authority = buyer
+        associated_token::authority = buyer,
+        associated_token::token_program = token_program,
     )]
     pub buyer_token_account: InterfaceAccount<'info, TokenAccount>,
     pub payment_token_mint: InterfaceAccount<'info, Mint>,    
