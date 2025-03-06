@@ -180,7 +180,6 @@ pub struct BuyChip<'info> {
         associated_token::token_program = token_program,
     )]
     pub buyer_chip_account: InterfaceAccount<'info, TokenAccount>,
-    // CHECK THE buyer_token_account constraints, 
     #[account(
         mut,
         associated_token::mint = payment_token_mint,
