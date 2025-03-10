@@ -4,7 +4,7 @@ use anchor_spl::token_interface::{
     self, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked,
 };
 
-declare_id!("3FFYCYGMqkjjpxMvGXu5XiRnZQtGJMN9r73Hh1yiBVjH");
+declare_id!("6DpfdoF5HV6W8HG3tewwGnQRyFbR8muKGS144HgfAVER");
 
 const ANCHOR_DISCRIMINATOR: usize = 8;
 

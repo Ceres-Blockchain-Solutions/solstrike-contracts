@@ -333,7 +333,7 @@ namespace SolStrike
 
         public static class SolStrikeProgram
         {
-            public const string ID = "3FFYCYGMqkjjpxMvGXu5XiRnZQtGJMN9r73Hh1yiBVjH";
+            public const string ID = "6DpfdoF5HV6W8HG3tewwGnQRyFbR8muKGS144HgfAVER";
             public static Solana.Unity.Rpc.Models.TransactionInstruction AddToken(AddTokenAccounts accounts, ulong token_price, PublicKey programId = null)
             {
                 programId ??= new(ID);
