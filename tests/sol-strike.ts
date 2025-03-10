@@ -21,39 +21,43 @@ import {
   createAccountsMintsAndTokenAccounts
 } from "@solana-developers/helpers"
 import { BN } from "bn.js";
-import { token } from "@coral-xyz/anchor/dist/cjs/utils";
 
 describe("sol-strike", () => {
   // Configure the client to use the local cluster.
-  anchor.setProvider(anchor.AnchorProvider.env());
-  const provider = anchor.getProvider();
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
 
   const program = anchor.workspace.SolStrike as Program<SolStrike>;
   const signer = anchor.web3.Keypair.generate()
-  let tokenMint
+  console.log("Signer:", signer.publicKey.toBase58())
 
-  async function airdropLamports(address: PublicKey, amount: number) {
-    const signature = await program.provider.connection.requestAirdrop(address, amount);
+  let tokenMint: anchor.web3.PublicKey
+  let usersMintsAndTokenAccounts: { users: Keypair[]; mints: Keypair[]; tokenAccounts: PublicKey[][]; };
+  let user: anchor.web3.Signer;
+  let userChipTokenAccountAddress: PublicKey;
 
-    const latestBlockHash = await program.provider.connection.getLatestBlockhash();
-
-    await program.provider.connection.confirmTransaction({
-        blockhash: latestBlockHash.blockhash,
-        lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
-        signature: signature,
-    })
-  }
+  const [chipMintPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from("CHIP_MINT")],
+    program.programId
+  );
 
   before(async () => {
     await airdropLamports(signer.publicKey, 1000 * LAMPORTS_PER_SOL);
+
+    usersMintsAndTokenAccounts = await createAccountsMintsAndTokenAccounts(
+      [
+        [1_000_000_000], 
+      ],
+      1 * LAMPORTS_PER_SOL,
+      provider.connection,
+      signer,
+    );
+
+    user = usersMintsAndTokenAccounts.users[0]
+    userChipTokenAccountAddress = await getAssociatedTokenAddress(chipMintPDA, user.publicKey, false, TOKEN_2022_PROGRAM_ID);
   });
 
   it("Initialize", async () => {
-    const [chipMintPDA] = PublicKey.findProgramAddressSync(
-      [Buffer.from("CHIP_MINT")],
-      program.programId
-    );
-    
     const [treasuryPDA] = PublicKey.findProgramAddressSync(
       [Buffer.from("TREASURY")],
       program.programId
@@ -80,6 +84,47 @@ describe("sol-strike", () => {
     assert(chipMintAccount !== null, "chip_mint PDA was not created!");
     assert(treasuryAccount !== null, "treasury PDA was not created!");
   });
+
+  it("Init global config", async () => {
+    const [globalConfigPDA] = PublicKey.findProgramAddressSync(
+      [Buffer.from("GLOBAL_CONFIG")],
+      program.programId
+    );
+
+    await program.methods
+      .initGlobalConfig(new anchor.BN(0.01 * LAMPORTS_PER_SOL))
+      .accountsStrict({
+        globalConfig: globalConfigPDA,
+        signer: signer.publicKey,
+        systemProgram: SYSTEM_PROGRAM_ID,
+      })
+      .signers([signer])
+      .rpc();
+
+    const globalConfigAccount = await program.account.globalConfig.fetch(globalConfigPDA);
+    console.log("Global config PDA:", globalConfigPDA.toBase58());
+    console.log("Global config:", globalConfigAccount);
+  })
+
+  it("Buy Chips with SOL", async () => {
+    const userAccountBalanceBefore = await provider.connection.getBalance(user.publicKey)
+    console.log("User balance before: ", userAccountBalanceBefore)
+
+    await program.methods.buyChipWithSol(new BN(7))
+    .accountsPartial({
+      buyer: user.publicKey,
+      tokenProgram: TOKEN_2022_PROGRAM_ID,
+    })
+    .signers([user])
+    .rpc()
+
+    const userAccountBalanceAfter = await provider.connection.getBalance(user.publicKey)
+    console.log("User balance after: ", userAccountBalanceAfter)
+    
+    const userChipTokenAccountAfter = await getAccount(provider.connection, userChipTokenAccountAddress, 'processed', TOKEN_2022_PROGRAM_ID);
+    console.log("User chip balance after: ", userChipTokenAccountAfter.amount)
+
+  })
 
   it("Add token", async () => {
     const [treasuryPDA] = PublicKey.findProgramAddressSync(
@@ -163,16 +208,6 @@ describe("sol-strike", () => {
   })
 
   it("Buy chip", async () => {
-    const usersMintsAndTokenAccounts = await createAccountsMintsAndTokenAccounts(
-      [
-        [1_000_000_000], 
-      ],
-      1 * LAMPORTS_PER_SOL,
-      provider.connection,
-      signer,
-    );
-
-    const user = usersMintsAndTokenAccounts.users[0]
     const paymentTokeMint = usersMintsAndTokenAccounts.mints[0]
     const userPaymentTokenAccount = usersMintsAndTokenAccounts.tokenAccounts[0][0]
 
@@ -248,4 +283,16 @@ describe("sol-strike", () => {
     console.log("Treasury balance: " + treasuryAccountBalance.value.amount)
     console.log("User chip balance: " + buyerChipAccountBalance.value.amount)
   })
+
+  async function airdropLamports(address: PublicKey, amount: number) {
+    const signature = await program.provider.connection.requestAirdrop(address, amount);
+
+    const latestBlockHash = await program.provider.connection.getLatestBlockhash();
+
+    await program.provider.connection.confirmTransaction({
+        blockhash: latestBlockHash.blockhash,
+        lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+        signature: signature,
+    })
+  }
 });
