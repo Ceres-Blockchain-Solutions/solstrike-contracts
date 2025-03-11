@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{
-    self, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked,
+    self, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked, Burn
 };
 
 declare_id!("3FFYCYGMqkjjpxMvGXu5XiRnZQtGJMN9r73Hh1yiBVjH");
@@ -35,7 +35,7 @@ pub mod sol_strike {
     pub fn buy_chip_with_sol(ctx: Context<BuyChipWithSol>, amount: u64) -> Result<()> {
         let global_config = &ctx.accounts.global_config;
 
-        let chip_price = global_config.sol_chip_price;
+        let chip_price = global_config.lamports_chip_price;
 
         let total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
 
@@ -71,56 +71,77 @@ pub mod sol_strike {
         Ok(())
     }
 
-    pub fn buy_chip(ctx: Context<BuyChip>, amount: u64) -> Result<()> {
-        let chip_token_price_state = &ctx.accounts.chip_token_price_state;
-        let chip_price = chip_token_price_state.token_price;
+    // pub fn buy_chip(ctx: Context<BuyChip>, amount: u64) -> Result<()> {
+    //     let chip_token_price_state = &ctx.accounts.chip_token_price_state;
+    //     let chip_price = chip_token_price_state.token_price;
+
+    //     let total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
+
+    //     let transfer_accounts = TransferChecked {
+    //         from: ctx.accounts.buyer_token_account.to_account_info(),
+    //         to: ctx.accounts.treasury_token_account.to_account_info(),
+    //         authority: ctx.accounts.buyer.to_account_info(),
+    //         mint: ctx.accounts.payment_token_mint.to_account_info(),
+    //     };
+
+    //     let cpi_ctx = CpiContext::new(
+    //         ctx.accounts.token_program.to_account_info(),
+    //         transfer_accounts,
+    //     );
+    //     token_interface::transfer_checked(
+    //         cpi_ctx,
+    //         total_payment,
+    //         ctx.accounts.payment_token_mint.decimals,
+    //     )?;
+
+    //     let chip_mint_seeds: &[&[u8]] = &[b"CHIP_MINT", &[ctx.bumps.chip_mint]];
+
+    //     let signer_seeds: &[&[&[u8]]] = &[chip_mint_seeds];
+
+    //     let mint_accounts = MintTo {
+    //         mint: ctx.accounts.chip_mint.to_account_info(),
+    //         to: ctx.accounts.buyer_chip_account.to_account_info(),
+    //         authority: ctx.accounts.chip_mint.to_account_info(),
+    //     };
+
+    //     let cpi_ctx = CpiContext::new_with_signer(
+    //         ctx.accounts.token_program.to_account_info(),
+    //         mint_accounts,
+    //         signer_seeds,
+    //     );
+    //     token_interface::mint_to(cpi_ctx, amount)?;
+
+    //     msg!(
+    //         "Successfully bought {} CHIP tokens for {} payment tokens.",
+    //         amount,
+    //         total_payment
+    //     );
+
+    //     Ok(())
+    // }
+
+    pub fn sell_chip(ctx: Context<SellChip>, amount: u64) -> Result<()> {
+        let global_config = &ctx.accounts.global_config;
+
+        let chip_price = global_config.lamports_chip_price;
 
         let total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
 
-        let transfer_accounts = TransferChecked {
-            from: ctx.accounts.buyer_token_account.to_account_info(),
-            to: ctx.accounts.treasury_token_account.to_account_info(),
-            authority: ctx.accounts.buyer.to_account_info(),
-            mint: ctx.accounts.payment_token_mint.to_account_info(),
+        let burn_accounts = Burn {
+            mint: ctx.accounts.chip_mint.to_account_info(),
+            from: ctx.accounts.seller_chip_account.to_account_info(),
+            authority: ctx.accounts.seller.to_account_info(),
         };
 
         let cpi_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
-            transfer_accounts,
+            burn_accounts,
         );
-        token_interface::transfer_checked(
-            cpi_ctx,
-            total_payment,
-            ctx.accounts.payment_token_mint.decimals,
-        )?;
+        token_interface::burn(cpi_ctx, amount)?;
 
-        let chip_mint_seeds: &[&[u8]] = &[b"CHIP_MINT", &[ctx.bumps.chip_mint]];
+        **ctx.accounts.treasury.to_account_info().try_borrow_mut_lamports()? -= total_payment;
+        **ctx.accounts.seller.to_account_info().try_borrow_mut_lamports()? += total_payment;    
 
-        let signer_seeds: &[&[&[u8]]] = &[chip_mint_seeds];
-
-        let mint_accounts = MintTo {
-            mint: ctx.accounts.chip_mint.to_account_info(),
-            to: ctx.accounts.buyer_chip_account.to_account_info(),
-            authority: ctx.accounts.chip_mint.to_account_info(),
-        };
-
-        let cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            mint_accounts,
-            signer_seeds,
-        );
-        token_interface::mint_to(cpi_ctx, amount)?;
-
-        msg!(
-            "Successfully bought {} CHIP tokens for {} payment tokens.",
-            amount,
-            total_payment
-        );
-
-        Ok(())
-    }
-
-    pub fn sell_chip(ctx: Context<SellChip>, amount: u64, receive_token: Pubkey) -> Result<()> {
         Ok(())
     }
 
@@ -135,14 +156,14 @@ pub mod sol_strike {
 
     pub fn init_global_config(ctx: Context<InitGlobalConfig>, chip_price: u64) -> Result<()> {
         let global_config = &mut ctx.accounts.global_config;
-        global_config.sol_chip_price = chip_price;
+        global_config.lamports_chip_price = chip_price;
         global_config.bump = ctx.bumps.global_config;
         Ok(())
     }
 
     pub fn update_sol_chip_price(ctx: Context<UpdateSolChipPrice>, new_price: u64) -> Result<()> {
         let global_config = &mut ctx.accounts.global_config;
-        global_config.sol_chip_price = new_price;
+        global_config.lamports_chip_price = new_price;
         Ok(())
     }
 }
@@ -150,7 +171,7 @@ pub mod sol_strike {
 #[account]
 #[derive(InitSpace)]
 pub struct GlobalConfig {
-    sol_chip_price: u64,
+    lamports_chip_price: u64,
     bump: u8,
 }
 
@@ -234,7 +255,11 @@ pub struct BuyChipWithSol<'info> {
         bump = global_config.bump
     )]
     pub global_config: Account<'info, GlobalConfig>,
-    #[account(mut, seeds = [b"TREASURY"], bump = treasury.bump)]
+    #[account(
+        mut, 
+        seeds = [b"TREASURY"], 
+        bump = treasury.bump
+    )]
     pub treasury: Account<'info, Treasury>,
     #[account(
         mut,
@@ -303,7 +328,36 @@ pub struct BuyChip<'info> {
 }
 
 #[derive(Accounts)]
-pub struct SellChip {}
+pub struct SellChip<'info> {
+    #[account(mut)]
+    pub seller: Signer<'info>,
+    #[account(
+        seeds = [b"GLOBAL_CONFIG"],
+        bump = global_config.bump
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+    #[account(
+        mut,
+        mint::authority = chip_mint,
+        seeds = [b"CHIP_MINT"],
+        bump
+    )]
+    pub chip_mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut, 
+        seeds = [b"TREASURY"], 
+        bump = treasury.bump
+    )]
+    pub treasury: Account<'info, Treasury>,
+    #[account(
+        associated_token::mint = chip_mint,
+        associated_token::authority = seller,
+        associated_token::token_program = token_program
+    )]
+    pub seller_chip_account: InterfaceAccount<'info, TokenAccount>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
 
 #[derive(Accounts)]
 pub struct InitGlobalConfig<'info> {
