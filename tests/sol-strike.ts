@@ -41,6 +41,16 @@ describe("sol-strike", () => {
     program.programId
   );
 
+  const [treasuryPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from("TREASURY")],
+    program.programId
+  );
+
+  const [globalConfigPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from("GLOBAL_CONFIG")],
+    program.programId
+  );
+
   before(async () => {
     await airdropLamports(signer.publicKey, 1000 * LAMPORTS_PER_SOL);
 
@@ -58,14 +68,10 @@ describe("sol-strike", () => {
   });
 
   it("Initialize", async () => {
-    const [treasuryPDA] = PublicKey.findProgramAddressSync(
-      [Buffer.from("TREASURY")],
-      program.programId
-    );
-
     await program.methods
-      .initialize()
+      .initialize(new BN(10000000)) // 0.01 SOL 
       .accountsStrict({
+        globalConfig: globalConfigPDA,
         chipMint: chipMintPDA,
         treasury: treasuryPDA,
         signer: signer.publicKey,
@@ -77,34 +83,22 @@ describe("sol-strike", () => {
 
     const chipMintAccount = await provider.connection.getAccountInfo(chipMintPDA);
     const treasuryAccount = await provider.connection.getAccountInfo(treasuryPDA);
+    const globalConfigAccount = await provider.connection.getAccountInfo(globalConfigPDA);
+
+    const globalConfig = await program.account.globalConfig.fetch(
+      globalConfigPDA
+    )
 
     console.log("Chip Mint PDA:", chipMintPDA.toBase58());
     console.log("Treasury PDA:", treasuryPDA.toBase58());
+    console.log("Global config PDA:", globalConfigPDA.toBase58());
+    console.log("Chip price in lamports: ", globalConfig.lamportsChipPrice.toNumber())
 
     assert(chipMintAccount !== null, "chip_mint PDA was not created!");
     assert(treasuryAccount !== null, "treasury PDA was not created!");
+    assert(globalConfigAccount !== null, "treasury PDA was not created!");
+    assert(globalConfig.lamportsChipPrice.toNumber() === 10000000, "Incorrect chip price!");
   });
-
-  it("Init global config", async () => {
-    const [globalConfigPDA] = PublicKey.findProgramAddressSync(
-      [Buffer.from("GLOBAL_CONFIG")],
-      program.programId
-    );
-
-    await program.methods
-      .initGlobalConfig(new anchor.BN(0.01 * LAMPORTS_PER_SOL))
-      .accountsStrict({
-        globalConfig: globalConfigPDA,
-        signer: signer.publicKey,
-        systemProgram: SYSTEM_PROGRAM_ID,
-      })
-      .signers([signer])
-      .rpc();
-
-    const globalConfigAccount = await program.account.globalConfig.fetch(globalConfigPDA);
-    console.log("Global config PDA:", globalConfigPDA.toBase58());
-    console.log("Global config:", globalConfigAccount);
-  })
 
   it("Buy Chips with SOL", async () => {
     const userAccountBalanceBefore = await provider.connection.getBalance(user.publicKey)
