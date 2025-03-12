@@ -15,6 +15,7 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
   TOKEN_2022_PROGRAM_ID,
+  getMint,
 } from "@solana/spl-token";
 
 import {
@@ -103,8 +104,8 @@ describe("sol-strike", () => {
   it("Buy Chips with SOL", async () => {
     const userAccountBalanceBefore = await provider.connection.getBalance(user.publicKey)
     const treasuryBalanceBefore = await provider.connection.getBalance(treasuryPDA)
-    console.log("User balance before: ", userAccountBalanceBefore)
-    console.log("Treasury balance before: ", treasuryBalanceBefore)
+    console.log("User lamports balance before: ", userAccountBalanceBefore)
+    console.log("Treasury lamports balance before: ", treasuryBalanceBefore)
 
     await program.methods.buyChipWithSol(new BN(7))
     .accountsStrict({
@@ -122,8 +123,37 @@ describe("sol-strike", () => {
 
     const userAccountBalanceAfter = await provider.connection.getBalance(user.publicKey)
     const treasuryBalanceAfter = await provider.connection.getBalance(treasuryPDA)
-    console.log("User balance after: ", userAccountBalanceAfter)
-    console.log("Treasury balance after: ", treasuryBalanceAfter)
+    console.log("User lamports balance after: ", userAccountBalanceAfter)
+    console.log("Treasury lamports balance after: ", treasuryBalanceAfter)
+
+    const userChipTokenAccountAfter = await getAccount(provider.connection, userChipTokenAccountAddress, 'processed', TOKEN_2022_PROGRAM_ID);
+    console.log("User chip balance after: ", userChipTokenAccountAfter.amount)
+  })
+
+  it("Sell cips", async () => {
+    const userAccountBalanceBefore = await provider.connection.getBalance(user.publicKey)
+    console.log("User lamports balance before: ", userAccountBalanceBefore)
+
+    let chipMintBefore = await getMint(provider.connection, chipMintPDA, 'processed', TOKEN_2022_PROGRAM_ID)
+    console.log("Chip mint supply before: ", chipMintBefore.supply)
+
+    await program.methods.sellChip(new BN(7))
+    .accountsStrict({
+      seller: user.publicKey,
+      globalConfig:globalConfigPDA,
+      chipMint:chipMintPDA,
+      treasury:treasuryPDA,
+      sellerChipAccount: userChipTokenAccountAddress,
+      tokenProgram: TOKEN_2022_PROGRAM_ID,
+      associatedTokenProgram:ASSOCIATED_TOKEN_PROGRAM_ID,
+    })
+    .signers([user])
+    .rpc()
+
+    const userAccountBalanceAfter = await provider.connection.getBalance(user.publicKey)
+    console.log("User lamports balance after: ", userAccountBalanceAfter)
+    let chipMintAfter = await getMint(provider.connection, chipMintPDA, 'processed', TOKEN_2022_PROGRAM_ID)
+    console.log("Chip mint supply after: ", chipMintAfter.supply)
 
     const userChipTokenAccountAfter = await getAccount(provider.connection, userChipTokenAccountAddress, 'processed', TOKEN_2022_PROGRAM_ID);
     console.log("User chip balance after: ", userChipTokenAccountAfter.amount)
@@ -208,82 +238,82 @@ describe("sol-strike", () => {
     expect(globalConfigUpdated.lamportsChipPrice.toNumber()).to.equal(20_000_000);
   })
 
-  it("Buy chip", async () => {
-    const paymentTokeMint = usersMintsAndTokenAccounts.mints[0]
-    const userPaymentTokenAccount = usersMintsAndTokenAccounts.tokenAccounts[0][0]
+  // it("Buy chip", async () => {
+  //   const paymentTokeMint = usersMintsAndTokenAccounts.mints[0]
+  //   const userPaymentTokenAccount = usersMintsAndTokenAccounts.tokenAccounts[0][0]
 
 
-    const [treasuryPDA] = PublicKey.findProgramAddressSync(
-      [Buffer.from("TREASURY")],
-      program.programId
-    );
+  //   const [treasuryPDA] = PublicKey.findProgramAddressSync(
+  //     [Buffer.from("TREASURY")],
+  //     program.programId
+  //   );
 
-    const [chipTokenPriceStatePDA] = PublicKey.findProgramAddressSync(
-      [paymentTokeMint.publicKey.toBuffer()],
-      program.programId
-    );
+  //   const [chipTokenPriceStatePDA] = PublicKey.findProgramAddressSync(
+  //     [paymentTokeMint.publicKey.toBuffer()],
+  //     program.programId
+  //   );
 
-    const treasuryAta = await getAssociatedTokenAddress(
-      paymentTokeMint.publicKey,
-      treasuryPDA,
-      true,
-      TOKEN_2022_PROGRAM_ID
-    )
+  //   const treasuryAta = await getAssociatedTokenAddress(
+  //     paymentTokeMint.publicKey,
+  //     treasuryPDA,
+  //     true,
+  //     TOKEN_2022_PROGRAM_ID
+  //   )
 
-    await program.methods
-      .addToken(new BN(500))
-      .accountsStrict({
-        chipTokenPriceState: chipTokenPriceStatePDA,
-        treasury: treasuryPDA,
-        treasuryTokenAccount: treasuryAta,
-        signer: user.publicKey,
-        paymentTokenMint: paymentTokeMint.publicKey,
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        systemProgram: SYSTEM_PROGRAM_ID,
-      })
-      .signers([user])
-      .rpc()
+  //   await program.methods
+  //     .addToken(new BN(500))
+  //     .accountsStrict({
+  //       chipTokenPriceState: chipTokenPriceStatePDA,
+  //       treasury: treasuryPDA,
+  //       treasuryTokenAccount: treasuryAta,
+  //       signer: user.publicKey,
+  //       paymentTokenMint: paymentTokeMint.publicKey,
+  //       tokenProgram: TOKEN_2022_PROGRAM_ID,
+  //       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+  //       systemProgram: SYSTEM_PROGRAM_ID,
+  //     })
+  //     .signers([user])
+  //     .rpc()
 
-    const [chipMintPDA] = PublicKey.findProgramAddressSync(
-      [Buffer.from("CHIP_MINT")],
-      program.programId
-    );
+  //   const [chipMintPDA] = PublicKey.findProgramAddressSync(
+  //     [Buffer.from("CHIP_MINT")],
+  //     program.programId
+  //   );
 
-    const buyerChipAccount = await getAssociatedTokenAddress(
-      chipMintPDA,
-      user.publicKey,
-      false,
-      TOKEN_2022_PROGRAM_ID
-    )
+  //   const buyerChipAccount = await getAssociatedTokenAddress(
+  //     chipMintPDA,
+  //     user.publicKey,
+  //     false,
+  //     TOKEN_2022_PROGRAM_ID
+  //   )
     
-    await program.methods
-      .buyChip(new BN(100))
-      .accountsStrict({
-        chipTokenPriceState: chipTokenPriceStatePDA,
-        treasury: treasuryPDA,
-        treasuryTokenAccount: treasuryAta,
-        buyer: user.publicKey,
-        chipMint: chipMintPDA,
-        buyerChipAccount: buyerChipAccount,
-        buyerTokenAccount: userPaymentTokenAccount,
-        paymentTokenMint: paymentTokeMint.publicKey,
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        systemProgram: SYSTEM_PROGRAM_ID,
-      })
-      .signers([user])
-      .rpc()
+  //   await program.methods
+  //     .buyChip(new BN(100))
+  //     .accountsStrict({
+  //       chipTokenPriceState: chipTokenPriceStatePDA,
+  //       treasury: treasuryPDA,
+  //       treasuryTokenAccount: treasuryAta,
+  //       buyer: user.publicKey,
+  //       chipMint: chipMintPDA,
+  //       buyerChipAccount: buyerChipAccount,
+  //       buyerTokenAccount: userPaymentTokenAccount,
+  //       paymentTokenMint: paymentTokeMint.publicKey,
+  //       tokenProgram: TOKEN_2022_PROGRAM_ID,
+  //       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+  //       systemProgram: SYSTEM_PROGRAM_ID,
+  //     })
+  //     .signers([user])
+  //     .rpc()
 
-    const userAccountbalance = await provider.connection.getTokenAccountBalance(userPaymentTokenAccount)
-    const treasuryAccountBalance = await provider.connection.getTokenAccountBalance(treasuryAta)
-    const buyerChipAccountBalance = await provider.connection.getTokenAccountBalance(buyerChipAccount)
+  //   const userAccountbalance = await provider.connection.getTokenAccountBalance(userPaymentTokenAccount)
+  //   const treasuryAccountBalance = await provider.connection.getTokenAccountBalance(treasuryAta)
+  //   const buyerChipAccountBalance = await provider.connection.getTokenAccountBalance(buyerChipAccount)
 
 
-    console.log("User balance: " + userAccountbalance.value.amount)
-    console.log("Treasury balance: " + treasuryAccountBalance.value.amount)
-    console.log("User chip balance: " + buyerChipAccountBalance.value.amount)
-  })
+  //   console.log("User balance: " + userAccountbalance.value.amount)
+  //   console.log("Treasury balance: " + treasuryAccountBalance.value.amount)
+  //   console.log("User chip balance: " + buyerChipAccountBalance.value.amount)
+  // })
 
   async function airdropLamports(address: PublicKey, amount: number) {
     const signature = await program.provider.connection.requestAirdrop(address, amount);

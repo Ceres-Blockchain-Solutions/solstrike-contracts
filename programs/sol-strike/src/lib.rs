@@ -6,7 +6,7 @@ use anchor_spl::token_interface::{
 };
 use anchor_spl::associated_token::AssociatedToken;
 
-declare_id!("3FFYCYGMqkjjpxMvGXu5XiRnZQtGJMN9r73Hh1yiBVjH");
+declare_id!("G7MTWspAJtbwpxso9n77irBChBRiptDwJP6fi4zYThEP");
 
 const ANCHOR_DISCRIMINATOR: usize = 8;
 
@@ -352,6 +352,7 @@ pub struct SellChip<'info> {
     )]
     pub treasury: Account<'info, Treasury>,
     #[account(
+        mut,
         associated_token::mint = chip_mint,
         associated_token::authority = seller,
         associated_token::token_program = token_program
