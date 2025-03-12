@@ -363,7 +363,11 @@ pub struct SellChip<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateSolChipPrice<'info> {
-    #[account(mut, seeds = [b"GLOBAL_CONFIG"], bump = global_config.bump)]
+    #[account(
+        mut, 
+        seeds = [b"GLOBAL_CONFIG"], 
+        bump = global_config.bump
+    )]
     pub global_config: Account<'info, GlobalConfig>,
     pub signer: Signer<'info>,
 }

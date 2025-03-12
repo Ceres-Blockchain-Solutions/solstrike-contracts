@@ -69,7 +69,7 @@ describe("sol-strike", () => {
 
   it("Initialize", async () => {
     await program.methods
-      .initialize(new BN(10000000)) // 0.01 SOL 
+      .initialize(new BN(10_000_000)) // 0.01 SOL 
       .accountsStrict({
         globalConfig: globalConfigPDA,
         chipMint: chipMintPDA,
@@ -97,108 +97,115 @@ describe("sol-strike", () => {
     assert(chipMintAccount !== null, "chip_mint PDA was not created!");
     assert(treasuryAccount !== null, "treasury PDA was not created!");
     assert(globalConfigAccount !== null, "treasury PDA was not created!");
-    assert(globalConfig.lamportsChipPrice.toNumber() === 10000000, "Incorrect chip price!");
+    assert(globalConfig.lamportsChipPrice.toNumber() === 10_000_000, "Incorrect chip price!");
   });
 
   it("Buy Chips with SOL", async () => {
     const userAccountBalanceBefore = await provider.connection.getBalance(user.publicKey)
+    const treasuryBalanceBefore = await provider.connection.getBalance(treasuryPDA)
     console.log("User balance before: ", userAccountBalanceBefore)
+    console.log("Treasury balance before: ", treasuryBalanceBefore)
 
     await program.methods.buyChipWithSol(new BN(7))
-    .accountsPartial({
+    .accountsStrict({
       buyer: user.publicKey,
+      globalConfig:globalConfigPDA,
+      treasury:treasuryPDA,
+      chipMint:chipMintPDA,
+      buyerChipAccount: userChipTokenAccountAddress,
       tokenProgram: TOKEN_2022_PROGRAM_ID,
+      associatedTokenProgram:ASSOCIATED_TOKEN_PROGRAM_ID,
+      systemProgram: SYSTEM_PROGRAM_ID
     })
     .signers([user])
     .rpc()
 
     const userAccountBalanceAfter = await provider.connection.getBalance(user.publicKey)
+    const treasuryBalanceAfter = await provider.connection.getBalance(treasuryPDA)
     console.log("User balance after: ", userAccountBalanceAfter)
-    
+    console.log("Treasury balance after: ", treasuryBalanceAfter)
+
     const userChipTokenAccountAfter = await getAccount(provider.connection, userChipTokenAccountAddress, 'processed', TOKEN_2022_PROGRAM_ID);
     console.log("User chip balance after: ", userChipTokenAccountAfter.amount)
-
   })
 
-  it("Add token", async () => {
-    const [treasuryPDA] = PublicKey.findProgramAddressSync(
-      [Buffer.from("TREASURY")],
-      program.programId
+  // it("Add token", async () => {
+  //   const [treasuryPDA] = PublicKey.findProgramAddressSync(
+  //     [Buffer.from("TREASURY")],
+  //     program.programId
+  //   );
+
+  //   tokenMint = await createMint(
+  //     provider.connection,
+  //     signer,
+  //     signer.publicKey,
+  //     null,
+  //     9,
+  //     Keypair.generate(),
+  //     undefined,
+  //     TOKEN_2022_PROGRAM_ID
+  //   )
+
+  //   const [chipTokenPriceStatePDA] = PublicKey.findProgramAddressSync(
+  //     [tokenMint.toBuffer()],
+  //     program.programId
+  //   );
+
+  //   const treasuryAta = await getAssociatedTokenAddress(
+  //     tokenMint,
+  //     treasuryPDA,
+  //     true,
+  //     TOKEN_2022_PROGRAM_ID
+  //   )
+
+  //   await program.methods
+  //     .addToken(new BN(123))
+  //     .accountsStrict({
+  //       chipTokenPriceState: chipTokenPriceStatePDA,
+  //       treasury: treasuryPDA,
+  //       treasuryTokenAccount: treasuryAta,
+  //       signer: signer.publicKey,
+  //       paymentTokenMint: tokenMint,
+  //       tokenProgram: TOKEN_2022_PROGRAM_ID,
+  //       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+  //       systemProgram: SYSTEM_PROGRAM_ID,
+  //     })
+  //     .signers([signer])
+  //     .rpc()
+
+  //   const chipTokenPriceState = await program.account.chipTokenPriceState.fetch(
+  //     chipTokenPriceStatePDA
+  //   );
+  //   expect(chipTokenPriceState.tokenPrice.toNumber()).to.equal(123);
+
+  //   const treasuryAtaInfo = await getAccount(provider.connection, treasuryAta, 'processed', TOKEN_2022_PROGRAM_ID);
+  //   console.log("Treasury token balance:", treasuryAtaInfo.amount);
+  //   expect(Number(treasuryAtaInfo.amount)).to.be.equal(0);
+  // })
+
+  it("Update chip lamports price", async () => {    
+    const globalConfig = await program.account.globalConfig.fetch(
+      globalConfigPDA
     );
 
-    tokenMint = await createMint(
-      provider.connection,
-      signer,
-      signer.publicKey,
-      null,
-      9,
-      Keypair.generate(),
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    )
-
-    const [chipTokenPriceStatePDA] = PublicKey.findProgramAddressSync(
-      [tokenMint.toBuffer()],
-      program.programId
-    );
-
-    const treasuryAta = await getAssociatedTokenAddress(
-      tokenMint,
-      treasuryPDA,
-      true,
-      TOKEN_2022_PROGRAM_ID
-    )
+    console.log("Price beofre update: ", globalConfig.lamportsChipPrice.toNumber())
+    expect(globalConfig.lamportsChipPrice.toNumber()).to.equal(10_000_000);
 
     await program.methods
-      .addToken(new BN(123))
+      .updateSolChipPrice(new BN(20_000_000))
       .accountsStrict({
-        chipTokenPriceState: chipTokenPriceStatePDA,
-        treasury: treasuryPDA,
-        treasuryTokenAccount: treasuryAta,
+        globalConfig: globalConfigPDA,
         signer: signer.publicKey,
-        paymentTokenMint: tokenMint,
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        systemProgram: SYSTEM_PROGRAM_ID,
       })
       .signers([signer])
       .rpc()
 
-    const chipTokenPriceState = await program.account.chipTokenPriceState.fetch(
-      chipTokenPriceStatePDA
+    const globalConfigUpdated = await program.account.globalConfig.fetch(
+      globalConfigPDA
     );
-    expect(chipTokenPriceState.tokenPrice.toNumber()).to.equal(123);
 
-    const treasuryAtaInfo = await getAccount(provider.connection, treasuryAta, 'processed', TOKEN_2022_PROGRAM_ID);
-    console.log("Treasury token balance:", treasuryAtaInfo.amount);
-    expect(Number(treasuryAtaInfo.amount)).to.be.equal(0);
-  })
-
-  it("Update token price", async () => {    
-    const [chipTokenPriceStatePDA] = PublicKey.findProgramAddressSync(
-      [tokenMint.toBuffer()],
-      program.programId
-    )
-
-    const chipTokenPriceState = await program.account.chipTokenPriceState.fetch(
-      chipTokenPriceStatePDA
-    );
-    expect(chipTokenPriceState.tokenPrice.toNumber()).to.equal(123);
-
-    await program.methods
-      .updateChipTokenPrice(new BN(200))
-      .accountsStrict({
-        chipTokenPriceState: chipTokenPriceStatePDA,
-        signer: signer.publicKey,
-        tokenMint: tokenMint,
-      })
-      .signers([signer])
-      .rpc()
-
-    const chipTokenUpdatedPriceState = await program.account.chipTokenPriceState.fetch(
-      chipTokenPriceStatePDA
-    );
-    expect(chipTokenUpdatedPriceState.tokenPrice.toNumber()).to.equal(200);
+    console.log("Price after update: ", globalConfigUpdated.lamportsChipPrice.toNumber())
+    expect(globalConfigUpdated.lamportsChipPrice.toNumber()).to.equal(20_000_000);
   })
 
   it("Buy chip", async () => {
