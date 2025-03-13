@@ -12,8 +12,6 @@ const ANCHOR_DISCRIMINATOR: usize = 8;
 
 #[program]
 pub mod sol_strike {
-    use crate::instruction::ClaimChips;
-
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>, lamports_price: u64) -> Result<()> {
@@ -202,6 +200,28 @@ pub mod sol_strike {
     }
 
     pub fn claim_chips(ctx: Context<ClaimChips>) -> Result<()> {
+        let claimable_rewards_account = &mut ctx.accounts.claimable_rewards_account;
+
+        let treasury_seeds: &[&[u8]] = &[b"TREASURY", &[ctx.accounts.treasury.bump]];
+
+        let signer_seeds: &[&[&[u8]]] = &[treasury_seeds];
+
+        let transfer_accounts = TransferChecked {
+            from: ctx.accounts.treasury_chip_token_account.to_account_info(),
+            to: ctx.accounts.claimer_chip_account.to_account_info(),
+            authority: ctx.accounts.treasury.to_account_info(),
+            mint: ctx.accounts.chip_mint.to_account_info(),
+        };
+
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            transfer_accounts,
+            signer_seeds,
+        );
+        token_interface::transfer_checked(cpi_ctx, claimable_rewards_account.amount, ctx.accounts.chip_mint.decimals)?;
+
+        //user claimed rewards, reset them
+        claimable_rewards_account.amount = 0;
         Ok(())
     }
 }
