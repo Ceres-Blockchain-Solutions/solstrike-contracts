@@ -12,6 +12,8 @@ const ANCHOR_DISCRIMINATOR: usize = 8;
 
 #[program]
 pub mod sol_strike {
+    use crate::instruction::ClaimChips;
+
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>, lamports_price: u64) -> Result<()> {
@@ -161,67 +163,16 @@ pub mod sol_strike {
         Ok(())
     }
 
-    // case if we automatically distribute rewards to users when the match is done
-    pub fn distribute_rewards(ctx: Context<DistributeRewards>) -> Result<()> {
-        let treasury_seeds: &[&[u8]] = &[b"TREASURY", &[ctx.accounts.treasury.bump]];
-        let signer_seeds: &[&[&[u8]]] = &[treasury_seeds];
+    // updates the state of the ClaimableRewards PDA (how many chips can a user claim)
+    // user will have a label to see how many chips can he calim and a button to claim
+    pub fn distribute_chips(ctx: Context<DistributeChips>) -> Result<()> {
+        let first_place_claimable_rewards = &mut ctx.accounts.first_place_claimable_rewards_account;
+        let second_place_claimable_rewards = &mut ctx.accounts.second_place_claimable_rewards_account;
+        let third_place_claimable_rewards = &mut ctx.accounts.third_place_claimable_rewards_account;
 
-        let first_prize_transfer_account = TransferChecked {
-            from: ctx.accounts.treasury_chip_token_account.to_account_info(),
-            to:ctx.accounts.first_place_chip_token_account.to_account_info(),
-            authority: ctx.accounts.treasury.to_account_info(), 
-            mint: ctx.accounts.chip_mint.to_account_info(),
-        };
-
-        let first_prize_cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            first_prize_transfer_account,
-            signer_seeds,
-        );
-
-        token_interface::transfer_checked(
-            first_prize_cpi_ctx,
-            (2.5 * 1_000_000_000.0) as u64,
-            ctx.accounts.chip_mint.decimals,
-        )?;
-
-        let second_prize_transfer_account = TransferChecked {
-            from: ctx.accounts.treasury_chip_token_account.to_account_info(),
-            to:ctx.accounts.second_place_chip_token_account.to_account_info(),
-            authority: ctx.accounts.treasury.to_account_info(), 
-            mint: ctx.accounts.chip_mint.to_account_info(),
-        };
-
-        let second_prize_cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            second_prize_transfer_account,
-            signer_seeds,
-        );
-
-        token_interface::transfer_checked(
-            second_prize_cpi_ctx,
-            (1.0 * 1_000_000_000.0) as u64,
-            ctx.accounts.chip_mint.decimals,
-        )?;
-
-        let third_prize_transfer_account = TransferChecked {
-            from: ctx.accounts.treasury_chip_token_account.to_account_info(),
-            to:ctx.accounts.third_place_chip_token_account.to_account_info(),
-            authority: ctx.accounts.treasury.to_account_info(), 
-            mint: ctx.accounts.chip_mint.to_account_info(),
-        };
-
-        let third_prize_cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            third_prize_transfer_account,
-            signer_seeds,
-        );
-
-        token_interface::transfer_checked(
-            third_prize_cpi_ctx,
-            (0.3 * 1_000_000_000.0) as u64,
-            ctx.accounts.chip_mint.decimals,
-        )?;
+        first_place_claimable_rewards.amount += (2.5 * 1_000_000_000.0) as u64;
+        second_place_claimable_rewards.amount += (1.0 * 1_000_000_000.0) as u64;
+        third_place_claimable_rewards.amount += (0.3 * 1_000_000_000.0) as u64;
 
         Ok(())
     }
@@ -240,13 +191,17 @@ pub mod sol_strike {
             ctx.accounts.token_program.to_account_info(),
             transfer_accounts,
         );
-        
+
         token_interface::transfer_checked(
             cpi_ctx,
             amount,
             ctx.accounts.chip_mint.decimals,
         )?;
 
+        Ok(())
+    }
+
+    pub fn claim_chips(ctx: Context<ClaimChips>) -> Result<()> {
         Ok(())
     }
 }
@@ -258,12 +213,19 @@ pub struct GlobalConfig {
     bump: u8,
 }
 
+// #[account]
+// #[derive(InitSpace)]
+// pub struct ChipTokenPriceState {
+//     pub token_address: Pubkey,
+//     pub token_price: u64,
+//     pub bump: u8,
+// }
+
 #[account]
 #[derive(InitSpace)]
-pub struct ChipTokenPriceState {
-    pub token_address: Pubkey,
-    pub token_price: u64,
-    pub bump: u8,
+pub struct ClaimableRewards {
+    pub amount: u64,
+    // pub bump: u8
 }
 
 #[account]
@@ -485,56 +447,37 @@ pub struct UpdateSolChipPrice<'info> {
 // }
 
 #[derive(Accounts)]
-pub struct DistributeRewards<'info> {
+pub struct DistributeChips<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     #[account(
-        mint::authority = chip_mint,
-        seeds = [b"CHIP_MINT"],
+        init_if_needed,
+        space = ANCHOR_DISCRIMINATOR + ClaimableRewards::INIT_SPACE,
+        payer = signer,
+        seeds = [first_place_authority.key().as_ref()],
         bump
     )]
-    pub chip_mint: InterfaceAccount<'info, Mint>,
+    pub first_place_claimable_rewards_account: Account<'info, ClaimableRewards>,
+    pub first_place_authority: UncheckedAccount<'info>,
     #[account(
-        mut, // vrv  ne treba testiraj
-        seeds = [b"TREASURY"], 
-        bump = treasury.bump
+        init_if_needed,
+        space = ANCHOR_DISCRIMINATOR + ClaimableRewards::INIT_SPACE,
+        payer = signer,
+        seeds = [second_place_authority.key().as_ref()],
+        bump
     )]
-    pub treasury: Account<'info, Treasury>,
+    pub second_place_claimable_rewards_account: Account<'info, ClaimableRewards>,
+    pub second_place_authority: UncheckedAccount<'info>,
     #[account(
-        mut,
-        associated_token::authority = treasury,
-        associated_token::mint = chip_mint,
-        associated_token::token_program = token_program
+        init_if_needed,
+        space = ANCHOR_DISCRIMINATOR + ClaimableRewards::INIT_SPACE,
+        payer = signer,
+        seeds = [third_place_authority.key().as_ref()],
+        bump
     )]
-    pub treasury_chip_token_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(
-        mut,
-        associated_token::authority = first_place_authority,
-        associated_token::mint = chip_mint,
-        associated_token::token_program = token_program
-    )]
-    pub first_place_chip_token_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut)]
-    pub first_place_authority: Signer<'info>,
-    #[account(
-        mut,
-        associated_token::authority = second_place_authority,
-        associated_token::mint = chip_mint,
-        associated_token::token_program = token_program
-    )]
-    pub second_place_chip_token_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut)]
-    pub second_place_authority: Signer<'info>,
-    #[account(
-        mut,
-        associated_token::authority = third_place_authority,
-        associated_token::mint = chip_mint,
-        associated_token::token_program = token_program
-    )]
-    pub third_place_chip_token_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut)]
-    pub third_place_authority: Signer<'info>,
-    pub token_program: Interface<'info, TokenInterface>,
+    pub third_place_claimable_rewards_account: Account<'info, ClaimableRewards>,
+    pub third_place_authority: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -567,6 +510,44 @@ pub struct ReserveChips<'info> {
         associated_token::token_program = token_program
     )]
     pub user_chip_account: InterfaceAccount<'info, TokenAccount>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimChips<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        seeds = [signer.key().as_ref()],
+        bump
+    )]
+    pub claimable_rewards_account: Account<'info, ClaimableRewards>,
+    #[account(
+        mint::authority = chip_mint,
+        seeds = [b"CHIP_MINT"],
+        bump
+    )]
+    pub chip_mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut, // vrv  ne treba testiraj
+        seeds = [b"TREASURY"], 
+        bump = treasury.bump
+    )]
+    pub treasury: Account<'info, Treasury>,
+    #[account(
+        mut,
+        associated_token::authority = treasury,
+        associated_token::mint = chip_mint,
+        associated_token::token_program = token_program
+    )]
+    pub treasury_chip_token_account: InterfaceAccount<'info, TokenAccount>,
+    #[account(
+        mut,
+        associated_token::mint = chip_mint,
+        associated_token::authority = signer,
+        associated_token::token_program = token_program
+    )]
+    pub claimer_chip_account: InterfaceAccount<'info, TokenAccount>,
     pub token_program: Interface<'info, TokenInterface>,
 }
 
