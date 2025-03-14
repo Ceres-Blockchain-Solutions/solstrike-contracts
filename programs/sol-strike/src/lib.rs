@@ -1,3 +1,5 @@
+mod constants;
+
 use anchor_lang::{
     prelude::*, system_program
 };
@@ -6,10 +8,9 @@ use anchor_spl::token_interface::{
 };
 use anchor_spl::associated_token::AssociatedToken;
 use program::SolStrike;
+use crate::constants::*;
 
-declare_id!("6DpfdoF5HV6W8HG3tewwGnQRyFbR8muKGS144HgfAVER");
-
-const ANCHOR_DISCRIMINATOR: usize = 8;
+declare_id!("G7MTWspAJtbwpxso9n77irBChBRiptDwJP6fi4zYThEP");
 
 #[program]
 pub mod sol_strike {
@@ -55,13 +56,6 @@ pub mod sol_strike {
             signer_seeds,
         );
         token_interface::mint_to(mint_to_cpi_ctx, amount)?;
-
-        msg!(
-            "Successfully bought {} CHIPs for {} lamports.",
-            amount,
-            total_payment
-        );
-
         Ok(())
     }
 
@@ -72,17 +66,15 @@ pub mod sol_strike {
 
         let total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
 
-        let burn_accounts = Burn {
-            mint: ctx.accounts.chip_mint.to_account_info(),
-            from: ctx.accounts.seller_chip_account.to_account_info(),
-            authority: ctx.accounts.seller.to_account_info(),
-        };
-
-        let cpi_ctx = CpiContext::new(
+        let burn_cpi_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
-            burn_accounts,
+            Burn {
+                mint: ctx.accounts.chip_mint.to_account_info(),
+                from: ctx.accounts.seller_chip_account.to_account_info(),
+                authority: ctx.accounts.seller.to_account_info(),
+            },
         );
-        token_interface::burn(cpi_ctx, amount)?;
+        token_interface::burn(burn_cpi_ctx, amount)?;
 
         **ctx.accounts.treasury.to_account_info().try_borrow_mut_lamports()? -= total_payment;
         **ctx.accounts.seller.to_account_info().try_borrow_mut_lamports()? += total_payment;    
@@ -96,40 +88,39 @@ pub mod sol_strike {
         Ok(())
     }
 
-    // updates the state of the ClaimableRewards PDA (how many chips can a user claim)
-    // user will have a label to see how many chips can he calim and a button to claim
-    pub fn distribute_chips(ctx: Context<DistributeChips>) -> Result<()> {
-        let first_place_claimable_rewards = &mut ctx.accounts.first_place_claimable_rewards_account;
-        let second_place_claimable_rewards = &mut ctx.accounts.second_place_claimable_rewards_account;
-        let third_place_claimable_rewards = &mut ctx.accounts.third_place_claimable_rewards_account;
+    // reserved chips are transfered to the treasury ATA and saved in the DB
+    // when user joins a game, reserved chips are deducted from the DB
+    pub fn reserve_chips(ctx: Context<ReserveChips>, amount: u64) -> Result<()> {
+        let transfer_checked_cpi_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            TransferChecked {
+                from: ctx.accounts.user_chip_account.to_account_info(),
+                to: ctx.accounts.treasury_chip_token_account.to_account_info(),
+                authority: ctx.accounts.signer.to_account_info(),
+                mint: ctx.accounts.chip_mint.to_account_info(),
+            },
+        );
 
-        first_place_claimable_rewards.amount += (2.5 * 1_000_000_000.0) as u64;
-        second_place_claimable_rewards.amount += (1.0 * 1_000_000_000.0) as u64;
-        third_place_claimable_rewards.amount += (0.3 * 1_000_000_000.0) as u64;
+        token_interface::transfer_checked(
+            transfer_checked_cpi_ctx,
+            amount,
+            ctx.accounts.chip_mint.decimals,
+        )?;
 
         Ok(())
     }
 
-    //reserved chips are transfered to the treasury ATA and saved in the DB
-    //when user joins a game, reserved chips are deducted from the DB
-    pub fn reserve_chips(ctx: Context<ReserveChips>, amount: u64) -> Result<()> {
-        let transfer_accounts = TransferChecked {
-            from: ctx.accounts.user_chip_account.to_account_info(),
-            to: ctx.accounts.treasury_chip_token_account.to_account_info(),
-            authority: ctx.accounts.signer.to_account_info(),
-            mint: ctx.accounts.chip_mint.to_account_info(),
-        };
+    // updates the state of the ClaimableRewards PDA (how many chips can a user claim)
+    // user will have a label to see how many chips can he claim and a button to claim
+    pub fn set_claimable_rewards(ctx: Context<SetClaimableRewards>) -> Result<()> {
+        let first_place_claimable_rewards = &mut ctx.accounts.first_place_claimable_rewards_account;
+        let second_place_claimable_rewards = &mut ctx.accounts.second_place_claimable_rewards_account;
+        let third_place_claimable_rewards = &mut ctx.accounts.third_place_claimable_rewards_account;
 
-        let cpi_ctx = CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            transfer_accounts,
-        );
 
-        token_interface::transfer_checked(
-            cpi_ctx,
-            amount,
-            ctx.accounts.chip_mint.decimals,
-        )?;
+        first_place_claimable_rewards.amount += (FIRST_PRIZE * (10^CHIP_DECIMALS) as f64) as u64;
+        second_place_claimable_rewards.amount += (SECOND_PRIZE * (10^CHIP_DECIMALS) as f64) as u64;
+        third_place_claimable_rewards.amount += (THIRD_PRIZE * (10^CHIP_DECIMALS) as f64) as u64;
 
         Ok(())
     }
@@ -141,19 +132,17 @@ pub mod sol_strike {
 
         let signer_seeds: &[&[&[u8]]] = &[treasury_seeds];
 
-        let transfer_accounts = TransferChecked {
-            from: ctx.accounts.treasury_chip_token_account.to_account_info(),
-            to: ctx.accounts.claimer_chip_account.to_account_info(),
-            authority: ctx.accounts.treasury.to_account_info(),
-            mint: ctx.accounts.chip_mint.to_account_info(),
-        };
-
-        let cpi_ctx = CpiContext::new_with_signer(
+        let transfer_checked_cpi_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
-            transfer_accounts,
+            TransferChecked {
+                from: ctx.accounts.treasury_chip_token_account.to_account_info(),
+                to: ctx.accounts.claimer_chip_account.to_account_info(),
+                authority: ctx.accounts.treasury.to_account_info(),
+                mint: ctx.accounts.chip_mint.to_account_info(),
+            },
             signer_seeds,
         );
-        token_interface::transfer_checked(cpi_ctx, claimable_rewards_account.amount, ctx.accounts.chip_mint.decimals)?;
+        token_interface::transfer_checked(transfer_checked_cpi_ctx, claimable_rewards_account.amount, ctx.accounts.chip_mint.decimals)?;
 
         //user claimed rewards, reset them
         claimable_rewards_account.amount = 0;
@@ -172,7 +161,6 @@ pub struct GlobalConfig {
 #[derive(InitSpace)]
 pub struct ClaimableRewards {
     pub amount: u64,
-    // pub bump: u8
 }
 
 #[account]
@@ -319,7 +307,7 @@ pub struct UpdateSolChipPrice<'info> {
 }
 
 #[derive(Accounts)]
-pub struct DistributeChips<'info> {
+pub struct SetClaimableRewards<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     #[account(
@@ -368,7 +356,6 @@ pub struct ReserveChips<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     #[account(
-        mut, // vrv  ne treba testiraj
         seeds = [b"TREASURY"], 
         bump = treasury.bump
     )]
@@ -401,6 +388,7 @@ pub struct ClaimChips<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     #[account(
+        mut,
         seeds = [signer.key().as_ref()],
         bump
     )]
@@ -412,7 +400,6 @@ pub struct ClaimChips<'info> {
     )]
     pub chip_mint: InterfaceAccount<'info, Mint>,
     #[account(
-        mut, // vrv  ne treba testiraj
         seeds = [b"TREASURY"], 
         bump = treasury.bump
     )]

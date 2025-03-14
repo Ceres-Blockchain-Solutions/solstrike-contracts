@@ -37,6 +37,8 @@ describe("sol-strike", () => {
   let user: anchor.web3.Signer;
   let userChipTokenAccountAddress: PublicKey;
 
+  let treasuryChipTokenAccount: PublicKey
+
   const [chipMintPDA] = PublicKey.findProgramAddressSync(
     [Buffer.from("CHIP_MINT")],
     program.programId
@@ -66,20 +68,34 @@ describe("sol-strike", () => {
 
     user = usersMintsAndTokenAccounts.users[0]
     userChipTokenAccountAddress = await getAssociatedTokenAddress(chipMintPDA, user.publicKey, false, TOKEN_2022_PROGRAM_ID);
+
+    treasuryChipTokenAccount = await getAssociatedTokenAddress(
+      chipMintPDA,
+      treasuryPDA,
+      true,
+      TOKEN_2022_PROGRAM_ID
+    )
   });
 
   it("Initialize", async () => {
+    let programData = await program.provider.connection.getAccountInfo(program.programId)
+    let programDataAccount = new PublicKey(programData.data.subarray(programData.data.length - 32));
+    
     await program.methods
       .initialize(new BN(10_000_000)) // 0.01 SOL 
       .accountsStrict({
         globalConfig: globalConfigPDA,
         chipMint: chipMintPDA,
         treasury: treasuryPDA,
-        signer: signer.publicKey,
+        treasuryChipTokenAccount: treasuryChipTokenAccount,
+        signer: program.provider.publicKey,
+        program: program.programId,
+        programData: programDataAccount,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SYSTEM_PROGRAM_ID,
       })
-      .signers([signer])
+      .signers([])
       .rpc();
 
     const chipMintAccount = await provider.connection.getAccountInfo(chipMintPDA);
@@ -159,64 +175,13 @@ describe("sol-strike", () => {
     console.log("User chip balance after: ", userChipTokenAccountAfter.amount)
   })
 
-  // it("Add token", async () => {
-  //   const [treasuryPDA] = PublicKey.findProgramAddressSync(
-  //     [Buffer.from("TREASURY")],
-  //     program.programId
-  //   );
-
-  //   tokenMint = await createMint(
-  //     provider.connection,
-  //     signer,
-  //     signer.publicKey,
-  //     null,
-  //     9,
-  //     Keypair.generate(),
-  //     undefined,
-  //     TOKEN_2022_PROGRAM_ID
-  //   )
-
-  //   const [chipTokenPriceStatePDA] = PublicKey.findProgramAddressSync(
-  //     [tokenMint.toBuffer()],
-  //     program.programId
-  //   );
-
-  //   const treasuryAta = await getAssociatedTokenAddress(
-  //     tokenMint,
-  //     treasuryPDA,
-  //     true,
-  //     TOKEN_2022_PROGRAM_ID
-  //   )
-
-  //   await program.methods
-  //     .addToken(new BN(123))
-  //     .accountsStrict({
-  //       chipTokenPriceState: chipTokenPriceStatePDA,
-  //       treasury: treasuryPDA,
-  //       treasuryTokenAccount: treasuryAta,
-  //       signer: signer.publicKey,
-  //       paymentTokenMint: tokenMint,
-  //       tokenProgram: TOKEN_2022_PROGRAM_ID,
-  //       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-  //       systemProgram: SYSTEM_PROGRAM_ID,
-  //     })
-  //     .signers([signer])
-  //     .rpc()
-
-  //   const chipTokenPriceState = await program.account.chipTokenPriceState.fetch(
-  //     chipTokenPriceStatePDA
-  //   );
-  //   expect(chipTokenPriceState.tokenPrice.toNumber()).to.equal(123);
-
-  //   const treasuryAtaInfo = await getAccount(provider.connection, treasuryAta, 'processed', TOKEN_2022_PROGRAM_ID);
-  //   console.log("Treasury token balance:", treasuryAtaInfo.amount);
-  //   expect(Number(treasuryAtaInfo.amount)).to.be.equal(0);
-  // })
-
-  it("Update chip lamports price", async () => {    
+  it("Update chip lamports price", async () => {   
     const globalConfig = await program.account.globalConfig.fetch(
       globalConfigPDA
     );
+
+    let programData = await program.provider.connection.getAccountInfo(program.programId)
+    let programDataAccount = new PublicKey(programData.data.subarray(programData.data.length - 32));
 
     console.log("Price beofre update: ", globalConfig.lamportsChipPrice.toNumber())
     expect(globalConfig.lamportsChipPrice.toNumber()).to.equal(10_000_000);
@@ -225,9 +190,11 @@ describe("sol-strike", () => {
       .updateSolChipPrice(new BN(20_000_000))
       .accountsStrict({
         globalConfig: globalConfigPDA,
-        signer: signer.publicKey,
+        program: program.programId,
+        programData: programDataAccount,
+        signer: program.provider.publicKey,
       })
-      .signers([signer])
+      .signers([])
       .rpc()
 
     const globalConfigUpdated = await program.account.globalConfig.fetch(
@@ -238,94 +205,22 @@ describe("sol-strike", () => {
     expect(globalConfigUpdated.lamportsChipPrice.toNumber()).to.equal(20_000_000);
   })
 
-  // it("Buy chip", async () => {
-  //   const paymentTokeMint = usersMintsAndTokenAccounts.mints[0]
-  //   const userPaymentTokenAccount = usersMintsAndTokenAccounts.tokenAccounts[0][0]
+  it("Reserve chips", async () => {
 
+  })
 
-  //   const [treasuryPDA] = PublicKey.findProgramAddressSync(
-  //     [Buffer.from("TREASURY")],
-  //     program.programId
-  //   );
-
-  //   const [chipTokenPriceStatePDA] = PublicKey.findProgramAddressSync(
-  //     [paymentTokeMint.publicKey.toBuffer()],
-  //     program.programId
-  //   );
-
-  //   const treasuryAta = await getAssociatedTokenAddress(
-  //     paymentTokeMint.publicKey,
-  //     treasuryPDA,
-  //     true,
-  //     TOKEN_2022_PROGRAM_ID
-  //   )
-
-  //   await program.methods
-  //     .addToken(new BN(500))
-  //     .accountsStrict({
-  //       chipTokenPriceState: chipTokenPriceStatePDA,
-  //       treasury: treasuryPDA,
-  //       treasuryTokenAccount: treasuryAta,
-  //       signer: user.publicKey,
-  //       paymentTokenMint: paymentTokeMint.publicKey,
-  //       tokenProgram: TOKEN_2022_PROGRAM_ID,
-  //       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-  //       systemProgram: SYSTEM_PROGRAM_ID,
-  //     })
-  //     .signers([user])
-  //     .rpc()
-
-  //   const [chipMintPDA] = PublicKey.findProgramAddressSync(
-  //     [Buffer.from("CHIP_MINT")],
-  //     program.programId
-  //   );
-
-  //   const buyerChipAccount = await getAssociatedTokenAddress(
-  //     chipMintPDA,
-  //     user.publicKey,
-  //     false,
-  //     TOKEN_2022_PROGRAM_ID
-  //   )
+  it("Set claimable rewards", async () => {
     
-  //   await program.methods
-  //     .buyChip(new BN(100))
-  //     .accountsStrict({
-  //       chipTokenPriceState: chipTokenPriceStatePDA,
-  //       treasury: treasuryPDA,
-  //       treasuryTokenAccount: treasuryAta,
-  //       buyer: user.publicKey,
-  //       chipMint: chipMintPDA,
-  //       buyerChipAccount: buyerChipAccount,
-  //       buyerTokenAccount: userPaymentTokenAccount,
-  //       paymentTokenMint: paymentTokeMint.publicKey,
-  //       tokenProgram: TOKEN_2022_PROGRAM_ID,
-  //       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-  //       systemProgram: SYSTEM_PROGRAM_ID,
-  //     })
-  //     .signers([user])
-  //     .rpc()
+  })
 
-  //   const userAccountbalance = await provider.connection.getTokenAccountBalance(userPaymentTokenAccount)
-  //   const treasuryAccountBalance = await provider.connection.getTokenAccountBalance(treasuryAta)
-  //   const buyerChipAccountBalance = await provider.connection.getTokenAccountBalance(buyerChipAccount)
-
-
-  //   console.log("User balance: " + userAccountbalance.value.amount)
-  //   console.log("Treasury balance: " + treasuryAccountBalance.value.amount)
-  //   console.log("User chip balance: " + buyerChipAccountBalance.value.amount)
-  // })
+  it("Claim chips", async () => {
+    
+  })
 
   async function airdropLamports(address: PublicKey, amount: number) {
     const signature = await program.provider.connection.requestAirdrop(address, amount);
 
     const latestBlockHash = await program.provider.connection.getLatestBlockhash();
-
-    let a = await program.provider.connection.getAccountInfo(program.programId)
-    let b = new PublicKey(a.data.subarray(3))
-    console.log("TEST A: ", a)
-    console.log("DATA: ", b)
-    
-
 
     await program.provider.connection.confirmTransaction({
         blockhash: latestBlockHash.blockhash,
