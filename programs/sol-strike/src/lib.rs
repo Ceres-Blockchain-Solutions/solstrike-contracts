@@ -194,7 +194,7 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = signer,
-        mint::decimals = 1,
+        mint::decimals = 9,
         mint::authority = chip_mint,
         seeds = [b"CHIP_MINT"],
         bump
