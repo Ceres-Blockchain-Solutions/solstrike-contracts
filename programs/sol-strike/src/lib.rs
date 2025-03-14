@@ -5,6 +5,7 @@ use anchor_spl::token_interface::{
     self, Mint, MintTo, TokenAccount, TokenInterface, Burn, TransferChecked
 };
 use anchor_spl::associated_token::AssociatedToken;
+use program::SolStrike;
 
 declare_id!("G7MTWspAJtbwpxso9n77irBChBRiptDwJP6fi4zYThEP");
 
@@ -217,6 +218,14 @@ pub struct Initialize<'info> {
     pub treasury_chip_token_account: InterfaceAccount<'info, TokenAccount>,
     #[account(mut)]
     pub signer: Signer<'info>,
+    #[account(
+        constraint = program.programdata_address()? == Some(program_data.key())
+    )]
+    pub program: Program<'info, SolStrike>,
+    #[account(
+        constraint = program_data.upgrade_authority_address == Some(signer.key())
+    )]
+    pub program_data: Account<'info, ProgramData>,
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -298,6 +307,14 @@ pub struct UpdateSolChipPrice<'info> {
         bump = global_config.bump
     )]
     pub global_config: Account<'info, GlobalConfig>,
+    #[account(
+        constraint = program.programdata_address()? == Some(program_data.key())
+    )]
+    pub program: Program<'info, SolStrike>,
+    #[account(
+        constraint = program_data.upgrade_authority_address == Some(signer.key())
+    )]
+    pub program_data: Account<'info, ProgramData>,
     pub signer: Signer<'info>,
 }
 
@@ -306,6 +323,14 @@ pub struct DistributeChips<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
     #[account(
+        constraint = program.programdata_address()? == Some(program_data.key())
+    )]
+    pub program: Program<'info, SolStrike>,
+    #[account(
+        constraint = program_data.upgrade_authority_address == Some(signer.key())
+    )]
+    pub program_data: Account<'info, ProgramData>,
+    #[account(
         init_if_needed,
         space = ANCHOR_DISCRIMINATOR + ClaimableRewards::INIT_SPACE,
         payer = signer,
@@ -313,6 +338,7 @@ pub struct DistributeChips<'info> {
         bump
     )]
     pub first_place_claimable_rewards_account: Account<'info, ClaimableRewards>,
+    /// CHECK: only an address that is the recipient, no need for checking
     pub first_place_authority: UncheckedAccount<'info>,
     #[account(
         init_if_needed,
@@ -322,6 +348,7 @@ pub struct DistributeChips<'info> {
         bump
     )]
     pub second_place_claimable_rewards_account: Account<'info, ClaimableRewards>,
+    /// CHECK: only an address that is the recipient, no need for checking
     pub second_place_authority: UncheckedAccount<'info>,
     #[account(
         init_if_needed,
@@ -331,6 +358,7 @@ pub struct DistributeChips<'info> {
         bump
     )]
     pub third_place_claimable_rewards_account: Account<'info, ClaimableRewards>,
+    /// CHECK: only an address that is the recipient, no need for checking
     pub third_place_authority: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }

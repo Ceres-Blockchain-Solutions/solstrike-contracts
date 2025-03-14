@@ -320,6 +320,13 @@ describe("sol-strike", () => {
 
     const latestBlockHash = await program.provider.connection.getLatestBlockhash();
 
+    let a = await program.provider.connection.getAccountInfo(program.programId)
+    let b = new PublicKey(a.data.subarray(3))
+    console.log("TEST A: ", a)
+    console.log("DATA: ", b)
+    
+
+
     await program.provider.connection.confirmTransaction({
         blockhash: latestBlockHash.blockhash,
         lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
