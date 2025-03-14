@@ -7,7 +7,7 @@ use anchor_spl::token_interface::{
 use anchor_spl::associated_token::AssociatedToken;
 use program::SolStrike;
 
-declare_id!("G7MTWspAJtbwpxso9n77irBChBRiptDwJP6fi4zYThEP");
+declare_id!("6DpfdoF5HV6W8HG3tewwGnQRyFbR8muKGS144HgfAVER");
 
 const ANCHOR_DISCRIMINATOR: usize = 8;
 
@@ -194,7 +194,7 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = signer,
-        mint::decimals = 9,
+        mint::decimals = 1,
         mint::authority = chip_mint,
         seeds = [b"CHIP_MINT"],
         bump

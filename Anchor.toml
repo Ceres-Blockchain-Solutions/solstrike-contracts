@@ -5,7 +5,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-sol_strike = "G7MTWspAJtbwpxso9n77irBChBRiptDwJP6fi4zYThEP"
+sol_strike = "6DpfdoF5HV6W8HG3tewwGnQRyFbR8muKGS144HgfAVER"
 
 [registry]
 url = "https://api.apr.dev"
@@ -16,3 +16,5 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+init = "npx ts-node scripts/init.ts"
+get-pdas = "npx ts-node scripts/get-pdas.ts"
