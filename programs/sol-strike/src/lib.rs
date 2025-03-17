@@ -33,7 +33,7 @@ pub mod sol_strike {
         let chip_price = global_config.lamports_chip_price;
 
         let mut total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
-        total_payment = total_payment.checked_div((10_i32.checked_pow(CHIP_DECIMALS as u32).unwrap()) as u64).ok_or(Errors::Overflow)?;
+        total_payment = total_payment.checked_div(10_u64.checked_pow(CHIP_DECIMALS as u32).unwrap()).ok_or(Errors::Overflow)?;
 
         let transfer_cpi_ctx = CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
@@ -66,7 +66,7 @@ pub mod sol_strike {
         let chip_price = global_config.lamports_chip_price;
 
         let mut total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
-        total_payment = total_payment.checked_div((10_i32.checked_pow(CHIP_DECIMALS as u32).unwrap()) as u64).ok_or(Errors::Overflow)?;
+        total_payment = total_payment.checked_div(10_u64.checked_pow(CHIP_DECIMALS as u32).unwrap()).ok_or(Errors::Overflow)?;
 
 
         let burn_cpi_ctx = CpiContext::new(
