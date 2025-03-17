@@ -59,7 +59,7 @@ describe("sol-strike", () => {
 
     usersMintsAndTokenAccounts = await createAccountsMintsAndTokenAccounts(
       [
-        [1_000_000_000], 
+        [1_000_000_000_000], 
       ],
       1 * LAMPORTS_PER_SOL,
       provider.connection,
@@ -123,7 +123,7 @@ describe("sol-strike", () => {
     console.log("User lamports balance before: ", userAccountBalanceBefore)
     console.log("Treasury lamports balance before: ", treasuryBalanceBefore)
 
-    await program.methods.buyChipWithSol(new BN(7))
+    await program.methods.buyChipWithSol(new BN(17_000_000_000))
     .accountsStrict({
       buyer: user.publicKey,
       globalConfig:globalConfigPDA,
@@ -153,7 +153,7 @@ describe("sol-strike", () => {
     let chipMintBefore = await getMint(provider.connection, chipMintPDA, 'processed', TOKEN_2022_PROGRAM_ID)
     console.log("Chip mint supply before: ", chipMintBefore.supply)
 
-    await program.methods.sellChip(new BN(7))
+    await program.methods.sellChip(new BN(7_000_000_000))
     .accountsStrict({
       seller: user.publicKey,
       globalConfig:globalConfigPDA,
@@ -206,11 +206,86 @@ describe("sol-strike", () => {
   })
 
   it("Reserve chips", async () => {
+    const userChipTokenAccountBefore = await getAccount(provider.connection, userChipTokenAccountAddress, 'processed', TOKEN_2022_PROGRAM_ID);
+    console.log("User chip balance before: ", userChipTokenAccountBefore.amount)
 
+    const treasuryChipTokenAccountBefore = await getAccount(provider.connection, treasuryChipTokenAccount, 'processed', TOKEN_2022_PROGRAM_ID);
+    console.log("User chip balance before: ", treasuryChipTokenAccountBefore.amount)
+
+    await program.methods
+      .reserveChips(new BN(5_000_000_000))
+      .accountsStrict({
+        signer: user.publicKey,
+        treasury: treasuryPDA,
+        chipMint: chipMintPDA,
+        treasuryChipTokenAccount: treasuryChipTokenAccount,
+        userChipAccount: userChipTokenAccountAddress,
+        tokenProgram: TOKEN_2022_PROGRAM_ID
+      })
+      .signers([user])
+      .rpc()
+
+    const userChipTokenAccountAfter = await getAccount(provider.connection, userChipTokenAccountAddress, 'processed', TOKEN_2022_PROGRAM_ID);
+    console.log("User chip balance before: ", userChipTokenAccountAfter.amount)
+
+    const treasuryChipTokenAccountAfter = await getAccount(provider.connection, treasuryChipTokenAccount, 'processed', TOKEN_2022_PROGRAM_ID);
+    console.log("User chip balance before: ", treasuryChipTokenAccountAfter.amount)
   })
 
   it("Set claimable rewards", async () => {
-    
+    let programData = await program.provider.connection.getAccountInfo(program.programId)
+    let programDataAccount = new PublicKey(programData.data.subarray(programData.data.length - 32));
+
+    const firstPlaceAuthority = anchor.web3.Keypair.generate()
+    const secondPlaceAuthority = anchor.web3.Keypair.generate()
+    const thirdPlaceAuthority = anchor.web3.Keypair.generate()
+
+    const [firstPlaceClaimableRewardsPda] = PublicKey.findProgramAddressSync(
+      [firstPlaceAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+
+    const [secondPlaceClaimableRewardsPda] = PublicKey.findProgramAddressSync(
+      [secondPlaceAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+
+    const [thirdPlaceClaimableRewardsPda] = PublicKey.findProgramAddressSync(
+      [thirdPlaceAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+
+    await program.methods
+      .setClaimableRewards()
+      .accountsStrict({
+        signer: program.provider.publicKey,
+        program: program.programId,
+        programData: programDataAccount,
+        firstPlaceClaimableRewardsAccount: firstPlaceClaimableRewardsPda,
+        firstPlaceAuthority: firstPlaceAuthority.publicKey,
+        secondPlaceClaimableRewardsAccount: secondPlaceClaimableRewardsPda,
+        secondPlaceAuthority: secondPlaceAuthority.publicKey, 
+        thirdPlaceClaimableRewardsAccount: thirdPlaceClaimableRewardsPda,
+        thirdPlaceAuthority: thirdPlaceAuthority.publicKey,
+        systemProgram: SYSTEM_PROGRAM_ID
+      })
+      .signers([])
+      .rpc()
+
+      const firstPlaceClaimableRewardsAccountAfter = await program.account.claimableRewards.fetch(
+        firstPlaceClaimableRewardsPda
+      )
+      console.log("First place state after: ", firstPlaceClaimableRewardsAccountAfter.amount.toString())
+
+      const secondPlaceClaimableRewardsAccountAfter = await program.account.claimableRewards.fetch(
+        secondPlaceClaimableRewardsPda
+      )
+      console.log("Second place state after: ", secondPlaceClaimableRewardsAccountAfter.amount.toString())
+
+      const thirdPlaceClaimableRewardsAccountAfter = await program.account.claimableRewards.fetch(
+        thirdPlaceClaimableRewardsPda
+      )
+      console.log("Third place state after: ", thirdPlaceClaimableRewardsAccountAfter.amount.toString())
   })
 
   it("Claim chips", async () => {
