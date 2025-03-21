@@ -110,6 +110,8 @@ pub mod sol_strike {
             ctx.accounts.chip_mint.decimals,
         )?;
 
+        emit!(ReserveChipsEvent { amount: amount, user: ctx.accounts.signer.key() });
+
         Ok(())
     }
 
@@ -147,8 +149,11 @@ pub mod sol_strike {
         );
         token_interface::transfer_checked(transfer_checked_cpi_ctx, claimable_rewards_account.amount, ctx.accounts.chip_mint.decimals)?;
 
+        emit!(ClaimChipsEvent { amount: claimable_rewards_account.amount, user: ctx.accounts.signer.key() });
+
         //user claimed rewards, reset them
         claimable_rewards_account.amount = 0;
+
         Ok(())
     }
 }
@@ -422,6 +427,18 @@ pub struct ClaimChips<'info> {
     )]
     pub claimer_chip_account: InterfaceAccount<'info, TokenAccount>,
     pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[event]
+pub struct ReserveChipsEvent {
+    pub amount: u64,
+    pub user: Pubkey
+}
+
+#[event]
+pub struct ClaimChipsEvent {
+    pub amount: u64,
+    pub user: Pubkey
 }
 
 #[error_code]
