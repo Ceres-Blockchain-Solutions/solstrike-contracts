@@ -22,6 +22,7 @@ wallet = "~/.config/solana/id.json"
 get-pdas = "npx ts-node scripts/get-pdas.ts"
 init = "npx ts-node scripts/init.ts"
 buy-and-reserve = "npx ts-node scripts/buy-and-reserve.ts"
+decode-log = "npx ts-node scripts/decode-log.ts"
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 
 [test]
