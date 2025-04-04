@@ -6,7 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-sol_strike = "G7MTWspAJtbwpxso9n77irBChBRiptDwJP6fi4zYThEP"
+sol_strike = "F7Dr4bH5knKjzBj8fuRJT9QGtHLyQSWTnWxYetHDnWHA"
+
+[programs.devnet]
+sol_strike = "F7Dr4bH5knKjzBj8fuRJT9QGtHLyQSWTnWxYetHDnWHA"
 
 [registry]
 url = "https://api.apr.dev"

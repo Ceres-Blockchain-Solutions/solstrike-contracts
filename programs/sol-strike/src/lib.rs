@@ -10,7 +10,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use program::SolStrike;
 use crate::constants::*;
 
-declare_id!("G7MTWspAJtbwpxso9n77irBChBRiptDwJP6fi4zYThEP");
+declare_id!("F7Dr4bH5knKjzBj8fuRJT9QGtHLyQSWTnWxYetHDnWHA");
 
 #[program]
 pub mod sol_strike {
