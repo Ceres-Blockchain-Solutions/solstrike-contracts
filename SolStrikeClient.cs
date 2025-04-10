@@ -16,24 +16,21 @@ using SolStrike;
 using SolStrike.Program;
 using SolStrike.Errors;
 using SolStrike.Accounts;
+using SolStrike.Events;
 using SolStrike.Types;
 
 namespace SolStrike
 {
     namespace Accounts
     {
-        public partial class ChipTokenPriceState
+        public partial class ClaimableRewards
         {
-            public static ulong ACCOUNT_DISCRIMINATOR => 7097304789661935891UL;
-            public static ReadOnlySpan<byte> ACCOUNT_DISCRIMINATOR_BYTES => new byte[]{19, 105, 122, 98, 26, 177, 126, 98};
-            public static string ACCOUNT_DISCRIMINATOR_B58 => "4FKcfS6ERmK";
-            public PublicKey TokenAddress { get; set; }
+            public static ulong ACCOUNT_DISCRIMINATOR => 15769378728584491768UL;
+            public static ReadOnlySpan<byte> ACCOUNT_DISCRIMINATOR_BYTES => new byte[]{248, 50, 225, 101, 103, 22, 216, 218};
+            public static string ACCOUNT_DISCRIMINATOR_B58 => "iWqeifhaXLm";
+            public ulong Amount { get; set; }
 
-            public ulong TokenPrice { get; set; }
-
-            public byte Bump { get; set; }
-
-            public static ChipTokenPriceState Deserialize(ReadOnlySpan<byte> _data)
+            public static ClaimableRewards Deserialize(ReadOnlySpan<byte> _data)
             {
                 int offset = 0;
                 ulong accountHashValue = _data.GetU64(offset);
@@ -43,13 +40,9 @@ namespace SolStrike
                     return null;
                 }
 
-                ChipTokenPriceState result = new ChipTokenPriceState();
-                result.TokenAddress = _data.GetPubKey(offset);
-                offset += 32;
-                result.TokenPrice = _data.GetU64(offset);
+                ClaimableRewards result = new ClaimableRewards();
+                result.Amount = _data.GetU64(offset);
                 offset += 8;
-                result.Bump = _data.GetU8(offset);
-                offset += 1;
                 return result;
             }
         }
@@ -59,7 +52,7 @@ namespace SolStrike
             public static ulong ACCOUNT_DISCRIMINATOR => 15686315269655627925UL;
             public static ReadOnlySpan<byte> ACCOUNT_DISCRIMINATOR_BYTES => new byte[]{149, 8, 156, 202, 160, 252, 176, 217};
             public static string ACCOUNT_DISCRIMINATOR_B58 => "Rvp9zjtEEBA";
-            public ulong SolChipPrice { get; set; }
+            public ulong LamportsChipPrice { get; set; }
 
             public byte Bump { get; set; }
 
@@ -74,7 +67,7 @@ namespace SolStrike
                 }
 
                 GlobalConfig result = new GlobalConfig();
-                result.SolChipPrice = _data.GetU64(offset);
+                result.LamportsChipPrice = _data.GetU64(offset);
                 offset += 8;
                 result.Bump = _data.GetU8(offset);
                 offset += 1;
@@ -115,6 +108,10 @@ namespace SolStrike
         }
     }
 
+    namespace Events
+    {
+    }
+
     namespace Types
     {
     }
@@ -125,15 +122,15 @@ namespace SolStrike
         {
         }
 
-        public async Task<Solana.Unity.Programs.Models.ProgramAccountsResultWrapper<List<ChipTokenPriceState>>> GetChipTokenPriceStatesAsync(string programAddress = SolStrikeProgram.ID, Commitment commitment = Commitment.Confirmed)
+        public async Task<Solana.Unity.Programs.Models.ProgramAccountsResultWrapper<List<ClaimableRewards>>> GetClaimableRewardssAsync(string programAddress = SolStrikeProgram.ID, Commitment commitment = Commitment.Confirmed)
         {
-            var list = new List<Solana.Unity.Rpc.Models.MemCmp>{new Solana.Unity.Rpc.Models.MemCmp{Bytes = ChipTokenPriceState.ACCOUNT_DISCRIMINATOR_B58, Offset = 0}};
+            var list = new List<Solana.Unity.Rpc.Models.MemCmp>{new Solana.Unity.Rpc.Models.MemCmp{Bytes = ClaimableRewards.ACCOUNT_DISCRIMINATOR_B58, Offset = 0}};
             var res = await RpcClient.GetProgramAccountsAsync(programAddress, commitment, memCmpList: list);
             if (!res.WasSuccessful || !(res.Result?.Count > 0))
-                return new Solana.Unity.Programs.Models.ProgramAccountsResultWrapper<List<ChipTokenPriceState>>(res);
-            List<ChipTokenPriceState> resultingAccounts = new List<ChipTokenPriceState>(res.Result.Count);
-            resultingAccounts.AddRange(res.Result.Select(result => ChipTokenPriceState.Deserialize(Convert.FromBase64String(result.Account.Data[0]))));
-            return new Solana.Unity.Programs.Models.ProgramAccountsResultWrapper<List<ChipTokenPriceState>>(res, resultingAccounts);
+                return new Solana.Unity.Programs.Models.ProgramAccountsResultWrapper<List<ClaimableRewards>>(res);
+            List<ClaimableRewards> resultingAccounts = new List<ClaimableRewards>(res.Result.Count);
+            resultingAccounts.AddRange(res.Result.Select(result => ClaimableRewards.Deserialize(Convert.FromBase64String(result.Account.Data[0]))));
+            return new Solana.Unity.Programs.Models.ProgramAccountsResultWrapper<List<ClaimableRewards>>(res, resultingAccounts);
         }
 
         public async Task<Solana.Unity.Programs.Models.ProgramAccountsResultWrapper<List<GlobalConfig>>> GetGlobalConfigsAsync(string programAddress = SolStrikeProgram.ID, Commitment commitment = Commitment.Confirmed)
@@ -158,13 +155,13 @@ namespace SolStrike
             return new Solana.Unity.Programs.Models.ProgramAccountsResultWrapper<List<Treasury>>(res, resultingAccounts);
         }
 
-        public async Task<Solana.Unity.Programs.Models.AccountResultWrapper<ChipTokenPriceState>> GetChipTokenPriceStateAsync(string accountAddress, Commitment commitment = Commitment.Finalized)
+        public async Task<Solana.Unity.Programs.Models.AccountResultWrapper<ClaimableRewards>> GetClaimableRewardsAsync(string accountAddress, Commitment commitment = Commitment.Finalized)
         {
             var res = await RpcClient.GetAccountInfoAsync(accountAddress, commitment);
             if (!res.WasSuccessful)
-                return new Solana.Unity.Programs.Models.AccountResultWrapper<ChipTokenPriceState>(res);
-            var resultingAccount = ChipTokenPriceState.Deserialize(Convert.FromBase64String(res.Result.Value.Data[0]));
-            return new Solana.Unity.Programs.Models.AccountResultWrapper<ChipTokenPriceState>(res, resultingAccount);
+                return new Solana.Unity.Programs.Models.AccountResultWrapper<ClaimableRewards>(res);
+            var resultingAccount = ClaimableRewards.Deserialize(Convert.FromBase64String(res.Result.Value.Data[0]));
+            return new Solana.Unity.Programs.Models.AccountResultWrapper<ClaimableRewards>(res, resultingAccount);
         }
 
         public async Task<Solana.Unity.Programs.Models.AccountResultWrapper<GlobalConfig>> GetGlobalConfigAsync(string accountAddress, Commitment commitment = Commitment.Finalized)
@@ -185,13 +182,13 @@ namespace SolStrike
             return new Solana.Unity.Programs.Models.AccountResultWrapper<Treasury>(res, resultingAccount);
         }
 
-        public async Task<SubscriptionState> SubscribeChipTokenPriceStateAsync(string accountAddress, Action<SubscriptionState, Solana.Unity.Rpc.Messages.ResponseValue<Solana.Unity.Rpc.Models.AccountInfo>, ChipTokenPriceState> callback, Commitment commitment = Commitment.Finalized)
+        public async Task<SubscriptionState> SubscribeClaimableRewardsAsync(string accountAddress, Action<SubscriptionState, Solana.Unity.Rpc.Messages.ResponseValue<Solana.Unity.Rpc.Models.AccountInfo>, ClaimableRewards> callback, Commitment commitment = Commitment.Finalized)
         {
             SubscriptionState res = await StreamingRpcClient.SubscribeAccountInfoAsync(accountAddress, (s, e) =>
             {
-                ChipTokenPriceState parsingResult = null;
+                ClaimableRewards parsingResult = null;
                 if (e.Value?.Data?.Count > 0)
-                    parsingResult = ChipTokenPriceState.Deserialize(Convert.FromBase64String(e.Value.Data[0]));
+                    parsingResult = ClaimableRewards.Deserialize(Convert.FromBase64String(e.Value.Data[0]));
                 callback(s, e, parsingResult);
             }, commitment);
             return res;
@@ -229,48 +226,6 @@ namespace SolStrike
 
     namespace Program
     {
-        public class AddTokenAccounts
-        {
-            public PublicKey ChipTokenPriceState { get; set; }
-
-            public PublicKey Treasury { get; set; }
-
-            public PublicKey TreasuryTokenAccount { get; set; }
-
-            public PublicKey Signer { get; set; }
-
-            public PublicKey PaymentTokenMint { get; set; }
-
-            public PublicKey TokenProgram { get; set; }
-
-            public PublicKey AssociatedTokenProgram { get; set; } = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-            public PublicKey SystemProgram { get; set; } = new PublicKey("11111111111111111111111111111111");
-        }
-
-        public class BuyChipAccounts
-        {
-            public PublicKey ChipTokenPriceState { get; set; }
-
-            public PublicKey Treasury { get; set; }
-
-            public PublicKey TreasuryTokenAccount { get; set; }
-
-            public PublicKey Buyer { get; set; }
-
-            public PublicKey ChipMint { get; set; }
-
-            public PublicKey BuyerChipAccount { get; set; }
-
-            public PublicKey BuyerTokenAccount { get; set; }
-
-            public PublicKey PaymentTokenMint { get; set; }
-
-            public PublicKey TokenProgram { get; set; }
-
-            public PublicKey AssociatedTokenProgram { get; set; } = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-            public PublicKey SystemProgram { get; set; } = new PublicKey("11111111111111111111111111111111");
-        }
-
         public class BuyChipWithSolAccounts
         {
             public PublicKey Buyer { get; set; }
@@ -289,83 +244,111 @@ namespace SolStrike
             public PublicKey SystemProgram { get; set; } = new PublicKey("11111111111111111111111111111111");
         }
 
-        public class InitGlobalConfigAccounts
+        public class ClaimChipsAccounts
         {
             public PublicKey Signer { get; set; }
 
-            public PublicKey GlobalConfig { get; set; }
+            public PublicKey ClaimableRewardsAccount { get; set; }
 
-            public PublicKey SystemProgram { get; set; } = new PublicKey("11111111111111111111111111111111");
-        }
-
-        public class InitializeAccounts
-        {
             public PublicKey ChipMint { get; set; }
 
             public PublicKey Treasury { get; set; }
 
+            public PublicKey TreasuryChipTokenAccount { get; set; }
+
+            public PublicKey ClaimerChipAccount { get; set; }
+
+            public PublicKey TokenProgram { get; set; }
+        }
+
+        public class InitializeAccounts
+        {
+            public PublicKey GlobalConfig { get; set; }
+
+            public PublicKey ChipMint { get; set; }
+
+            public PublicKey Treasury { get; set; }
+
+            public PublicKey TreasuryChipTokenAccount { get; set; }
+
             public PublicKey Signer { get; set; }
+
+            public PublicKey Program { get; set; } = new PublicKey("F7Dr4bH5knKjzBj8fuRJT9QGtHLyQSWTnWxYetHDnWHA");
+            public PublicKey ProgramData { get; set; }
 
             public PublicKey TokenProgram { get; set; }
 
+            public PublicKey AssociatedTokenProgram { get; set; } = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
             public PublicKey SystemProgram { get; set; } = new PublicKey("11111111111111111111111111111111");
+        }
+
+        public class ReserveChipsAccounts
+        {
+            public PublicKey Signer { get; set; }
+
+            public PublicKey Treasury { get; set; }
+
+            public PublicKey ChipMint { get; set; }
+
+            public PublicKey TreasuryChipTokenAccount { get; set; }
+
+            public PublicKey UserChipAccount { get; set; }
+
+            public PublicKey TokenProgram { get; set; }
         }
 
         public class SellChipAccounts
         {
+            public PublicKey Seller { get; set; }
+
+            public PublicKey GlobalConfig { get; set; }
+
+            public PublicKey ChipMint { get; set; }
+
+            public PublicKey Treasury { get; set; }
+
+            public PublicKey SellerChipAccount { get; set; }
+
+            public PublicKey TokenProgram { get; set; }
+
+            public PublicKey AssociatedTokenProgram { get; set; } = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
         }
 
-        public class UpdateChipTokenPriceAccounts
+        public class SetClaimableRewardsAccounts
         {
-            public PublicKey ChipTokenPriceState { get; set; }
-
             public PublicKey Signer { get; set; }
 
-            public PublicKey TokenMint { get; set; }
+            public PublicKey Program { get; set; } = new PublicKey("F7Dr4bH5knKjzBj8fuRJT9QGtHLyQSWTnWxYetHDnWHA");
+            public PublicKey ProgramData { get; set; }
+
+            public PublicKey FirstPlaceClaimableRewardsAccount { get; set; }
+
+            public PublicKey FirstPlaceAuthority { get; set; }
+
+            public PublicKey SecondPlaceClaimableRewardsAccount { get; set; }
+
+            public PublicKey SecondPlaceAuthority { get; set; }
+
+            public PublicKey ThirdPlaceClaimableRewardsAccount { get; set; }
+
+            public PublicKey ThirdPlaceAuthority { get; set; }
+
+            public PublicKey SystemProgram { get; set; } = new PublicKey("11111111111111111111111111111111");
         }
 
         public class UpdateSolChipPriceAccounts
         {
             public PublicKey GlobalConfig { get; set; }
 
+            public PublicKey Program { get; set; } = new PublicKey("F7Dr4bH5knKjzBj8fuRJT9QGtHLyQSWTnWxYetHDnWHA");
+            public PublicKey ProgramData { get; set; }
+
             public PublicKey Signer { get; set; }
         }
 
         public static class SolStrikeProgram
         {
-            public const string ID = "6DpfdoF5HV6W8HG3tewwGnQRyFbR8muKGS144HgfAVER";
-            public static Solana.Unity.Rpc.Models.TransactionInstruction AddToken(AddTokenAccounts accounts, ulong token_price, PublicKey programId = null)
-            {
-                programId ??= new(ID);
-                List<Solana.Unity.Rpc.Models.AccountMeta> keys = new()
-                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.ChipTokenPriceState, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Treasury, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.TreasuryTokenAccount, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Signer, true), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.PaymentTokenMint, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.TokenProgram, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.AssociatedTokenProgram, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.SystemProgram, false)};
-                byte[] _data = new byte[1200];
-                int offset = 0;
-                _data.WriteU64(3766188206372618221UL, offset);
-                offset += 8;
-                _data.WriteU64(token_price, offset);
-                offset += 8;
-                byte[] resultData = new byte[offset];
-                Array.Copy(_data, resultData, offset);
-                return new Solana.Unity.Rpc.Models.TransactionInstruction{Keys = keys, ProgramId = programId.KeyBytes, Data = resultData};
-            }
-
-            public static Solana.Unity.Rpc.Models.TransactionInstruction BuyChip(BuyChipAccounts accounts, ulong amount, PublicKey programId = null)
-            {
-                programId ??= new(ID);
-                List<Solana.Unity.Rpc.Models.AccountMeta> keys = new()
-                {Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.ChipTokenPriceState, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Treasury, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.TreasuryTokenAccount, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Buyer, true), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.ChipMint, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.BuyerChipAccount, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.BuyerTokenAccount, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.PaymentTokenMint, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.TokenProgram, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.AssociatedTokenProgram, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.SystemProgram, false)};
-                byte[] _data = new byte[1200];
-                int offset = 0;
-                _data.WriteU64(5593750255586685921UL, offset);
-                offset += 8;
-                _data.WriteU64(amount, offset);
-                offset += 8;
-                byte[] resultData = new byte[offset];
-                Array.Copy(_data, resultData, offset);
-                return new Solana.Unity.Rpc.Models.TransactionInstruction{Keys = keys, ProgramId = programId.KeyBytes, Data = resultData};
-            }
-
+            public const string ID = "F7Dr4bH5knKjzBj8fuRJT9QGtHLyQSWTnWxYetHDnWHA";
             public static Solana.Unity.Rpc.Models.TransactionInstruction BuyChipWithSol(BuyChipWithSolAccounts accounts, ulong amount, PublicKey programId = null)
             {
                 programId ??= new(ID);
@@ -382,64 +365,76 @@ namespace SolStrike
                 return new Solana.Unity.Rpc.Models.TransactionInstruction{Keys = keys, ProgramId = programId.KeyBytes, Data = resultData};
             }
 
-            public static Solana.Unity.Rpc.Models.TransactionInstruction InitGlobalConfig(InitGlobalConfigAccounts accounts, ulong chip_price, PublicKey programId = null)
+            public static Solana.Unity.Rpc.Models.TransactionInstruction ClaimChips(ClaimChipsAccounts accounts, PublicKey programId = null)
             {
                 programId ??= new(ID);
                 List<Solana.Unity.Rpc.Models.AccountMeta> keys = new()
-                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Signer, true), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.GlobalConfig, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.SystemProgram, false)};
+                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Signer, true), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.ClaimableRewardsAccount, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.ChipMint, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.Treasury, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.TreasuryChipTokenAccount, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.ClaimerChipAccount, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.TokenProgram, false)};
                 byte[] _data = new byte[1200];
                 int offset = 0;
-                _data.WriteU64(18408463851358423180UL, offset);
-                offset += 8;
-                _data.WriteU64(chip_price, offset);
+                _data.WriteU64(1934180530880433553UL, offset);
                 offset += 8;
                 byte[] resultData = new byte[offset];
                 Array.Copy(_data, resultData, offset);
                 return new Solana.Unity.Rpc.Models.TransactionInstruction{Keys = keys, ProgramId = programId.KeyBytes, Data = resultData};
             }
 
-            public static Solana.Unity.Rpc.Models.TransactionInstruction Initialize(InitializeAccounts accounts, PublicKey programId = null)
+            public static Solana.Unity.Rpc.Models.TransactionInstruction Initialize(InitializeAccounts accounts, ulong lamports_price, PublicKey programId = null)
             {
                 programId ??= new(ID);
                 List<Solana.Unity.Rpc.Models.AccountMeta> keys = new()
-                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.ChipMint, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Treasury, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Signer, true), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.TokenProgram, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.SystemProgram, false)};
+                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.GlobalConfig, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.ChipMint, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Treasury, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.TreasuryChipTokenAccount, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Signer, true), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.Program, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.ProgramData, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.TokenProgram, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.AssociatedTokenProgram, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.SystemProgram, false)};
                 byte[] _data = new byte[1200];
                 int offset = 0;
                 _data.WriteU64(17121445590508351407UL, offset);
                 offset += 8;
+                _data.WriteU64(lamports_price, offset);
+                offset += 8;
                 byte[] resultData = new byte[offset];
                 Array.Copy(_data, resultData, offset);
                 return new Solana.Unity.Rpc.Models.TransactionInstruction{Keys = keys, ProgramId = programId.KeyBytes, Data = resultData};
             }
 
-            public static Solana.Unity.Rpc.Models.TransactionInstruction SellChip(SellChipAccounts accounts, ulong amount, PublicKey receive_token, PublicKey programId = null)
+            public static Solana.Unity.Rpc.Models.TransactionInstruction ReserveChips(ReserveChipsAccounts accounts, ulong amount, PublicKey programId = null)
             {
                 programId ??= new(ID);
                 List<Solana.Unity.Rpc.Models.AccountMeta> keys = new()
-                {};
+                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Signer, true), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.Treasury, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.ChipMint, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.TreasuryChipTokenAccount, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.UserChipAccount, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.TokenProgram, false)};
+                byte[] _data = new byte[1200];
+                int offset = 0;
+                _data.WriteU64(2781749682280865997UL, offset);
+                offset += 8;
+                _data.WriteU64(amount, offset);
+                offset += 8;
+                byte[] resultData = new byte[offset];
+                Array.Copy(_data, resultData, offset);
+                return new Solana.Unity.Rpc.Models.TransactionInstruction{Keys = keys, ProgramId = programId.KeyBytes, Data = resultData};
+            }
+
+            public static Solana.Unity.Rpc.Models.TransactionInstruction SellChip(SellChipAccounts accounts, ulong amount, PublicKey programId = null)
+            {
+                programId ??= new(ID);
+                List<Solana.Unity.Rpc.Models.AccountMeta> keys = new()
+                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Seller, true), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.GlobalConfig, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.ChipMint, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Treasury, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.SellerChipAccount, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.TokenProgram, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.AssociatedTokenProgram, false)};
                 byte[] _data = new byte[1200];
                 int offset = 0;
                 _data.WriteU64(3332416062178962661UL, offset);
                 offset += 8;
                 _data.WriteU64(amount, offset);
                 offset += 8;
-                _data.WritePubKey(receive_token, offset);
-                offset += 32;
                 byte[] resultData = new byte[offset];
                 Array.Copy(_data, resultData, offset);
                 return new Solana.Unity.Rpc.Models.TransactionInstruction{Keys = keys, ProgramId = programId.KeyBytes, Data = resultData};
             }
 
-            public static Solana.Unity.Rpc.Models.TransactionInstruction UpdateChipTokenPrice(UpdateChipTokenPriceAccounts accounts, ulong new_token_price, PublicKey programId = null)
+            public static Solana.Unity.Rpc.Models.TransactionInstruction SetClaimableRewards(SetClaimableRewardsAccounts accounts, PublicKey programId = null)
             {
                 programId ??= new(ID);
                 List<Solana.Unity.Rpc.Models.AccountMeta> keys = new()
-                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.ChipTokenPriceState, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Signer, true), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.TokenMint, false)};
+                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.Signer, true), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.Program, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.ProgramData, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.FirstPlaceClaimableRewardsAccount, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.FirstPlaceAuthority, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.SecondPlaceClaimableRewardsAccount, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.SecondPlaceAuthority, false), Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.ThirdPlaceClaimableRewardsAccount, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.ThirdPlaceAuthority, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.SystemProgram, false)};
                 byte[] _data = new byte[1200];
                 int offset = 0;
-                _data.WriteU64(14567175082992295059UL, offset);
-                offset += 8;
-                _data.WriteU64(new_token_price, offset);
+                _data.WriteU64(16119603077347428777UL, offset);
                 offset += 8;
                 byte[] resultData = new byte[offset];
                 Array.Copy(_data, resultData, offset);
@@ -450,7 +445,7 @@ namespace SolStrike
             {
                 programId ??= new(ID);
                 List<Solana.Unity.Rpc.Models.AccountMeta> keys = new()
-                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.GlobalConfig, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.Signer, true)};
+                {Solana.Unity.Rpc.Models.AccountMeta.Writable(accounts.GlobalConfig, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.Program, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.ProgramData, false), Solana.Unity.Rpc.Models.AccountMeta.ReadOnly(accounts.Signer, true)};
                 byte[] _data = new byte[1200];
                 int offset = 0;
                 _data.WriteU64(11697544153095196084UL, offset);
