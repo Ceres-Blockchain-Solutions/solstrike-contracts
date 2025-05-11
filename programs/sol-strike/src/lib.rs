@@ -88,9 +88,7 @@ pub mod sol_strike {
         );
         token_interface::burn(burn_cpi_ctx, amount)?;
 
-        **treasury
-            .to_account_info()
-            .try_borrow_mut_lamports()? -= total_payment;
+        **treasury.to_account_info().try_borrow_mut_lamports()? -= total_payment;
         **ctx
             .accounts
             .seller
@@ -216,7 +214,7 @@ pub mod sol_strike {
         Ok(())
     }
 
-    pub fn claim_platform_fees(ctx: Context<ClaimPlatfromFees>)-> Result<()> {
+    pub fn claim_platform_fees(ctx: Context<ClaimPlatfromFees>) -> Result<()> {
         let treasury = &mut ctx.accounts.treasury;
 
         let treasury_seeds: &[&[u8]] = &[b"TREASURY", &[treasury.bump]];
@@ -241,9 +239,7 @@ pub mod sol_strike {
         )?;
 
         // claim lamports
-        **treasury
-            .to_account_info()
-            .try_borrow_mut_lamports()? -= treasury.claimable_lamports;
+        **treasury.to_account_info().try_borrow_mut_lamports()? -= treasury.claimable_lamports;
         **ctx
             .accounts
             .authority
@@ -338,7 +334,7 @@ pub struct BuyChipWithSol<'info> {
     )]
     pub global_config: Account<'info, GlobalConfig>,
     #[account(
-        mut, 
+        mut,
         seeds = [b"TREASURY"], 
         bump = treasury.bump
     )]
@@ -380,7 +376,7 @@ pub struct SellChip<'info> {
     )]
     pub chip_mint: InterfaceAccount<'info, Mint>,
     #[account(
-        mut, 
+        mut,
         seeds = [b"TREASURY"], 
         bump = treasury.bump
     )]
@@ -399,7 +395,7 @@ pub struct SellChip<'info> {
 #[derive(Accounts)]
 pub struct UpdateSolChipPrice<'info> {
     #[account(
-        mut, 
+        mut,
         seeds = [b"GLOBAL_CONFIG"], 
         bump = global_config.bump
     )]
@@ -435,7 +431,7 @@ pub struct SetClaimableRewards<'info> {
     )]
     pub chip_mint: InterfaceAccount<'info, Mint>,
     #[account(
-        mut, 
+        mut,
         seeds = [b"TREASURY"], 
         bump = treasury.bump
     )]
@@ -550,7 +546,6 @@ pub struct ClaimChips<'info> {
     pub claimer_chip_account: InterfaceAccount<'info, TokenAccount>,
     pub token_program: Interface<'info, TokenInterface>,
 }
-
 
 #[derive(Accounts)]
 pub struct ClaimPlatfromFees<'info> {
