@@ -131,7 +131,7 @@ describe("sol-strike", () => {
     console.log("User lamports balance before: ", userAccountBalanceBefore)
     console.log("Treasury lamports balance before: ", treasuryBalanceBefore)
 
-    await program.methods.buyChipWithSol(new BN(17_000_000_000))
+    await program.methods.buyChipWithSol(new BN(10_000_000_000))
     .accountsStrict({
       buyer: user.publicKey,
       globalConfig:globalConfigPDA,
@@ -156,12 +156,14 @@ describe("sol-strike", () => {
 
   it("Sell cips", async () => {
     const userAccountBalanceBefore = await provider.connection.getBalance(user.publicKey)
+    const treasuryBalanceBefore = await provider.connection.getBalance(treasuryPDA)
     console.log("User lamports balance before: ", userAccountBalanceBefore)
+    console.log("Treasury lamports balance before: ", treasuryBalanceBefore)
 
     let chipMintBefore = await getMint(provider.connection, chipMintPDA, 'processed', TOKEN_2022_PROGRAM_ID)
     console.log("Chip mint supply before: ", chipMintBefore.supply.toString())
 
-    await program.methods.sellChip(new BN(7_000_000_000))
+    await program.methods.sellChip(new BN(1_000_000_000))
     .accountsStrict({
       seller: user.publicKey,
       globalConfig:globalConfigPDA,
@@ -175,7 +177,11 @@ describe("sol-strike", () => {
     .rpc()
 
     const userAccountBalanceAfter = await provider.connection.getBalance(user.publicKey)
+    const treasuryBalanceAfter = await provider.connection.getBalance(treasuryPDA)
+
     console.log("User lamports balance after: ", userAccountBalanceAfter)
+    console.log("Treasury lamports balance after: ", treasuryBalanceAfter)
+
     let chipMintAfter = await getMint(provider.connection, chipMintPDA, 'processed', TOKEN_2022_PROGRAM_ID)
     console.log("Chip mint supply after: ", chipMintAfter.supply.toString())
 
@@ -218,10 +224,10 @@ describe("sol-strike", () => {
     console.log("User chip balance before: ", userChipTokenAccountBefore.amount.toString())
 
     const treasuryChipTokenAccountBefore = await getAccount(provider.connection, treasuryChipTokenAccount, 'processed', TOKEN_2022_PROGRAM_ID);
-    console.log("User chip balance before: ", treasuryChipTokenAccountBefore.amount.toString())
+    console.log("Treasury chip balance before: ", treasuryChipTokenAccountBefore.amount.toString())
 
     await program.methods
-      .reserveChips(new BN(5_000_000_000))
+      .reserveChips(new BN(8_000_000_000))
       .accountsStrict({
         signer: user.publicKey,
         treasury: treasuryPDA,
@@ -234,10 +240,10 @@ describe("sol-strike", () => {
       .rpc()
 
     const userChipTokenAccountAfter = await getAccount(provider.connection, userChipTokenAccountAddress, 'processed', TOKEN_2022_PROGRAM_ID);
-    console.log("User chip balance before: ", userChipTokenAccountAfter.amount.toString())
+    console.log("User chip balance after: ", userChipTokenAccountAfter.amount.toString())
 
     const treasuryChipTokenAccountAfter = await getAccount(provider.connection, treasuryChipTokenAccount, 'processed', TOKEN_2022_PROGRAM_ID);
-    console.log("User chip balance before: ", treasuryChipTokenAccountAfter.amount.toString())
+    console.log("Treasury chip balance after: ", treasuryChipTokenAccountAfter.amount.toString())
   })
 
   it("Set claimable rewards", async () => {
@@ -271,6 +277,58 @@ describe("sol-strike", () => {
         secondPlaceAuthority: secondPlaceAuthority.publicKey, 
         thirdPlaceClaimableRewardsAccount: thirdPlaceClaimableRewardsPda,
         thirdPlaceAuthority: thirdPlaceAuthority.publicKey,
+        systemProgram: SYSTEM_PROGRAM_ID
+      })
+      .signers([])
+      .rpc()
+
+      const firstPlaceClaimableRewardsAccountAfter = await program.account.claimableRewards.fetch(
+        firstPlaceClaimableRewardsPda
+      )
+      console.log("First place state after: ", firstPlaceClaimableRewardsAccountAfter.amount.toString())
+
+      const secondPlaceClaimableRewardsAccountAfter = await program.account.claimableRewards.fetch(
+        secondPlaceClaimableRewardsPda
+      )
+      console.log("Second place state after: ", secondPlaceClaimableRewardsAccountAfter.amount.toString())
+
+      const thirdPlaceClaimableRewardsAccountAfter = await program.account.claimableRewards.fetch(
+        thirdPlaceClaimableRewardsPda
+      )
+      console.log("Third place state after: ", thirdPlaceClaimableRewardsAccountAfter.amount.toString())
+  })
+
+  it("Set claimable rewards OPTION", async () => {
+    let programData = await program.provider.connection.getAccountInfo(program.programId)
+    let programDataAccount = new PublicKey(programData.data.subarray(programData.data.length - 32));
+
+    const [firstPlaceClaimableRewardsPda] = PublicKey.findProgramAddressSync(
+      [user.publicKey.toBuffer()],
+      program.programId
+    );
+
+    const [secondPlaceClaimableRewardsPda] = PublicKey.findProgramAddressSync(
+      [secondPlaceAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+
+    const [thirdPlaceClaimableRewardsPda] = PublicKey.findProgramAddressSync(
+      [thirdPlaceAuthority.publicKey.toBuffer()],
+      program.programId
+    );
+
+    await program.methods
+      .setClaimableRewards()
+      .accountsStrict({
+        signer: program.provider.publicKey,
+        program: program.programId,
+        programData: programDataAccount,
+        firstPlaceClaimableRewardsAccount: firstPlaceClaimableRewardsPda,
+        firstPlaceAuthority: user.publicKey,
+        secondPlaceClaimableRewardsAccount: null,
+        secondPlaceAuthority: null, 
+        thirdPlaceClaimableRewardsAccount: null,
+        thirdPlaceAuthority: null,
         systemProgram: SYSTEM_PROGRAM_ID
       })
       .signers([])

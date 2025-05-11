@@ -1,14 +1,12 @@
 mod constants;
 
-use anchor_lang::{
-    prelude::*, system_program
-};
-use anchor_spl::token_interface::{
-    self, Mint, MintTo, TokenAccount, TokenInterface, Burn, TransferChecked
-};
-use anchor_spl::associated_token::AssociatedToken;
-use program::SolStrike;
 use crate::constants::*;
+use anchor_lang::{prelude::*, system_program};
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token_interface::{
+    self, Burn, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked,
+};
+use program::SolStrike;
 
 declare_id!("F7Dr4bH5knKjzBj8fuRJT9QGtHLyQSWTnWxYetHDnWHA");
 
@@ -26,14 +24,17 @@ pub mod sol_strike {
 
         Ok(())
     }
-    
+
     pub fn buy_chip_with_sol(ctx: Context<BuyChipWithSol>, amount: u64) -> Result<()> {
         let global_config = &ctx.accounts.global_config;
 
         let chip_price = global_config.lamports_chip_price;
 
         let mut total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
-        total_payment = total_payment.checked_div(10_u64.checked_pow(CHIP_DECIMALS as u32).unwrap()).ok_or(Errors::Overflow)?;
+        total_payment = total_payment
+            .checked_div(10_u64.checked_pow(CHIP_DECIMALS as u32).unwrap())
+            .ok_or(Errors::Overflow)?;
+        total_payment = apply_fee(total_payment, true)?;
 
         let transfer_cpi_ctx = CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
@@ -66,8 +67,17 @@ pub mod sol_strike {
         let chip_price = global_config.lamports_chip_price;
 
         let mut total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
-        total_payment = total_payment.checked_div(10_u64.checked_pow(CHIP_DECIMALS as u32).unwrap()).ok_or(Errors::Overflow)?;
+        total_payment = total_payment
+            .checked_div(10_u64.checked_pow(CHIP_DECIMALS as u32).unwrap())
+            .ok_or(Errors::Overflow)?;
 
+        msg!("BEFORE");
+        msg!("{:?}", total_payment);
+
+        total_payment = apply_fee(total_payment, false)?;
+
+        msg!("AFTER");
+        msg!("{:?}", total_payment);
 
         let burn_cpi_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -79,8 +89,16 @@ pub mod sol_strike {
         );
         token_interface::burn(burn_cpi_ctx, amount)?;
 
-        **ctx.accounts.treasury.to_account_info().try_borrow_mut_lamports()? -= total_payment;
-        **ctx.accounts.seller.to_account_info().try_borrow_mut_lamports()? += total_payment;    
+        **ctx
+            .accounts
+            .treasury
+            .to_account_info()
+            .try_borrow_mut_lamports()? -= total_payment;
+        **ctx
+            .accounts
+            .seller
+            .to_account_info()
+            .try_borrow_mut_lamports()? += total_payment;
 
         Ok(())
     }
@@ -110,7 +128,10 @@ pub mod sol_strike {
             ctx.accounts.chip_mint.decimals,
         )?;
 
-        emit!(ReserveChipsEvent { amount: amount, user: ctx.accounts.signer.key() });
+        emit!(ReserveChipsEvent {
+            amount: amount,
+            user: ctx.accounts.signer.key()
+        });
 
         Ok(())
     }
@@ -119,13 +140,22 @@ pub mod sol_strike {
     // user will have a label to see how many chips can he claim and a button to claim
     pub fn set_claimable_rewards(ctx: Context<SetClaimableRewards>) -> Result<()> {
         let first_place_claimable_rewards = &mut ctx.accounts.first_place_claimable_rewards_account;
-        let second_place_claimable_rewards = &mut ctx.accounts.second_place_claimable_rewards_account;
-        let third_place_claimable_rewards = &mut ctx.accounts.third_place_claimable_rewards_account;
 
+        let multiplier = 10_i32.checked_pow(CHIP_DECIMALS as u32).unwrap() as f64;
 
-        first_place_claimable_rewards.amount += (FIRST_PRIZE * (10_i32.checked_pow(CHIP_DECIMALS as u32).unwrap()) as f64) as u64;
-        second_place_claimable_rewards.amount += (SECOND_PRIZE * (10_i32.checked_pow(CHIP_DECIMALS as u32).unwrap()) as f64) as u64;
-        third_place_claimable_rewards.amount += (THIRD_PRIZE * (10_i32.checked_pow(CHIP_DECIMALS as u32).unwrap()) as f64) as u64;
+        first_place_claimable_rewards.amount += (FIRST_PRIZE * multiplier) as u64;
+
+        if let Some(second_place_claimable_rewards) =
+            ctx.accounts.second_place_claimable_rewards_account.as_mut()
+        {
+            second_place_claimable_rewards.amount += (SECOND_PRIZE * multiplier) as u64;
+        }
+
+        if let Some(third_place_claimable_rewards) =
+            ctx.accounts.third_place_claimable_rewards_account.as_mut()
+        {
+            third_place_claimable_rewards.amount += (THIRD_PRIZE * multiplier) as u64;
+        }
 
         Ok(())
     }
@@ -147,9 +177,16 @@ pub mod sol_strike {
             },
             signer_seeds,
         );
-        token_interface::transfer_checked(transfer_checked_cpi_ctx, claimable_rewards_account.amount, ctx.accounts.chip_mint.decimals)?;
+        token_interface::transfer_checked(
+            transfer_checked_cpi_ctx,
+            claimable_rewards_account.amount,
+            ctx.accounts.chip_mint.decimals,
+        )?;
 
-        emit!(ClaimChipsEvent { amount: claimable_rewards_account.amount, user: ctx.accounts.signer.key() });
+        emit!(ClaimChipsEvent {
+            amount: claimable_rewards_account.amount,
+            user: ctx.accounts.signer.key()
+        });
 
         //user claimed rewards, reset them
         claimable_rewards_account.amount = 0;
@@ -174,6 +211,7 @@ pub struct ClaimableRewards {
 #[account]
 #[derive(InitSpace)]
 pub struct Treasury {
+    pub claimable: u64,
     pub bump: u8,
 }
 
@@ -340,22 +378,22 @@ pub struct SetClaimableRewards<'info> {
         init_if_needed,
         space = ANCHOR_DISCRIMINATOR + ClaimableRewards::INIT_SPACE,
         payer = signer,
-        seeds = [second_place_authority.key().as_ref()],
+        seeds = [second_place_authority.as_ref().expect("Missing second_place_authority").key().as_ref()],
         bump
     )]
-    pub second_place_claimable_rewards_account: Account<'info, ClaimableRewards>,
+    pub second_place_claimable_rewards_account: Option<Account<'info, ClaimableRewards>>,
     /// CHECK: only an address that is the recipient, no need for checking
-    pub second_place_authority: UncheckedAccount<'info>,
+    pub second_place_authority: Option<UncheckedAccount<'info>>,
     #[account(
         init_if_needed,
         space = ANCHOR_DISCRIMINATOR + ClaimableRewards::INIT_SPACE,
         payer = signer,
-        seeds = [third_place_authority.key().as_ref()],
+        seeds = [third_place_authority.as_ref().expect("Missing third_place_authority").key().as_ref()],
         bump
     )]
-    pub third_place_claimable_rewards_account: Account<'info, ClaimableRewards>,
+    pub third_place_claimable_rewards_account: Option<Account<'info, ClaimableRewards>>,
     /// CHECK: only an address that is the recipient, no need for checking
-    pub third_place_authority: UncheckedAccount<'info>,
+    pub third_place_authority: Option<UncheckedAccount<'info>>,
     pub system_program: Program<'info, System>,
 }
 
@@ -429,19 +467,45 @@ pub struct ClaimChips<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
+/// Applies a fee by either adding or subtracting it.
+/// Use add_fee = true for buying, false for selling
+/// when buying round up, when selling round down
+fn apply_fee(value: u64, add_fee: bool) -> Result<u64> {
+    if add_fee {
+        let numerator = value
+            .checked_mul(CHIP_FEE_BASIS_DIVISOR + CHIP_FEE_BASIS_POINTS)
+            .ok_or(Errors::Overflow)?;
+        let rounded = numerator
+            .checked_add(CHIP_FEE_BASIS_DIVISOR - 1)
+            .ok_or(Errors::Overflow)?;
+        rounded
+            .checked_div(CHIP_FEE_BASIS_DIVISOR)
+            .ok_or(Errors::Overflow.into())
+    } else {
+        let numerator = value
+            .checked_mul(CHIP_FEE_BASIS_DIVISOR - CHIP_FEE_BASIS_POINTS)
+            .ok_or(Errors::Overflow)?;
+        numerator
+            .checked_div(CHIP_FEE_BASIS_DIVISOR)
+            .ok_or(Errors::Overflow.into())
+    }
+}
+
 #[event]
 pub struct ReserveChipsEvent {
     pub amount: u64,
-    pub user: Pubkey
+    pub user: Pubkey,
 }
 
 #[event]
 pub struct ClaimChipsEvent {
     pub amount: u64,
-    pub user: Pubkey
+    pub user: Pubkey,
 }
 
 #[error_code]
 pub enum Errors {
     Overflow,
+    MissingSecondPlaceAccount,
+    MissingThirdPlaceAccount,
 }
