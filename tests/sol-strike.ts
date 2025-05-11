@@ -16,6 +16,7 @@ import {
   getAssociatedTokenAddress,
   TOKEN_2022_PROGRAM_ID,
   getMint,
+  createAssociatedTokenAccount,
 } from "@solana/spl-token";
 
 import {
@@ -38,7 +39,6 @@ describe("sol-strike", () => {
   let userChipTokenAccountAddress: PublicKey;
 
   let treasuryChipTokenAccount: PublicKey
-
   const [chipMintPDA] = PublicKey.findProgramAddressSync(
     [Buffer.from("CHIP_MINT")],
     program.programId
@@ -128,6 +128,12 @@ describe("sol-strike", () => {
   it("Buy Chips with SOL", async () => {
     const userAccountBalanceBefore = await provider.connection.getBalance(user.publicKey)
     const treasuryBalanceBefore = await provider.connection.getBalance(treasuryPDA)
+    const treasuryBeofre = await program.account.treasury.fetch(
+      treasuryPDA
+    )
+
+    console.log("Treasury claimable lamports before: ", treasuryBeofre.claimableLamports.toString())
+
     console.log("User lamports balance before: ", userAccountBalanceBefore)
     console.log("Treasury lamports balance before: ", treasuryBalanceBefore)
 
@@ -147,6 +153,11 @@ describe("sol-strike", () => {
 
     const userAccountBalanceAfter = await provider.connection.getBalance(user.publicKey)
     const treasuryBalanceAfter = await provider.connection.getBalance(treasuryPDA)
+    const treasuryAfter = await program.account.treasury.fetch(
+      treasuryPDA
+    )
+
+    console.log("Treasury claimable lamports before: ", treasuryAfter.claimableLamports.toString())
     console.log("User lamports balance after: ", userAccountBalanceAfter)
     console.log("Treasury lamports balance after: ", treasuryBalanceAfter)
 
@@ -157,6 +168,11 @@ describe("sol-strike", () => {
   it("Sell cips", async () => {
     const userAccountBalanceBefore = await provider.connection.getBalance(user.publicKey)
     const treasuryBalanceBefore = await provider.connection.getBalance(treasuryPDA)
+    const treasuryBeofre = await program.account.treasury.fetch(
+      treasuryPDA
+    )
+
+    console.log("Treasury claimable lamports before: ", treasuryBeofre.claimableLamports.toString())
     console.log("User lamports balance before: ", userAccountBalanceBefore)
     console.log("Treasury lamports balance before: ", treasuryBalanceBefore)
 
@@ -178,7 +194,11 @@ describe("sol-strike", () => {
 
     const userAccountBalanceAfter = await provider.connection.getBalance(user.publicKey)
     const treasuryBalanceAfter = await provider.connection.getBalance(treasuryPDA)
+    const treasuryAfter = await program.account.treasury.fetch(
+      treasuryPDA
+    )
 
+    console.log("Treasury claimable lamports before: ", treasuryAfter.claimableLamports.toString())
     console.log("User lamports balance after: ", userAccountBalanceAfter)
     console.log("Treasury lamports balance after: ", treasuryBalanceAfter)
 
@@ -250,6 +270,12 @@ describe("sol-strike", () => {
     let programData = await program.provider.connection.getAccountInfo(program.programId)
     let programDataAccount = new PublicKey(programData.data.subarray(programData.data.length - 32));
 
+    const treasuryBeofre = await program.account.treasury.fetch(
+      treasuryPDA
+    )
+
+    console.log("Treasury claimable lamports before: ", treasuryBeofre.claimableChips.toString())
+
     const [firstPlaceClaimableRewardsPda] = PublicKey.findProgramAddressSync(
       [user.publicKey.toBuffer()],
       program.programId
@@ -271,16 +297,26 @@ describe("sol-strike", () => {
         signer: program.provider.publicKey,
         program: program.programId,
         programData: programDataAccount,
+        chipMint: chipMintPDA,
+        treasury: treasuryPDA,
+        treasuryChipTokenAccount: treasuryChipTokenAccount,
         firstPlaceClaimableRewardsAccount: firstPlaceClaimableRewardsPda,
         firstPlaceAuthority: user.publicKey,
         secondPlaceClaimableRewardsAccount: secondPlaceClaimableRewardsPda,
         secondPlaceAuthority: secondPlaceAuthority.publicKey, 
         thirdPlaceClaimableRewardsAccount: thirdPlaceClaimableRewardsPda,
         thirdPlaceAuthority: thirdPlaceAuthority.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
         systemProgram: SYSTEM_PROGRAM_ID
       })
       .signers([])
       .rpc()
+
+      const treasuryAfter = await program.account.treasury.fetch(
+        treasuryPDA
+      )
+  
+      console.log("Treasury claimable lamports after: ", treasuryAfter.claimableChips.toString())
 
       const firstPlaceClaimableRewardsAccountAfter = await program.account.claimableRewards.fetch(
         firstPlaceClaimableRewardsPda
@@ -302,6 +338,12 @@ describe("sol-strike", () => {
     let programData = await program.provider.connection.getAccountInfo(program.programId)
     let programDataAccount = new PublicKey(programData.data.subarray(programData.data.length - 32));
 
+    const treasuryBeofre = await program.account.treasury.fetch(
+      treasuryPDA
+    )
+
+    console.log("Treasury claimable lamports before: ", treasuryBeofre.claimableChips.toString())
+
     const [firstPlaceClaimableRewardsPda] = PublicKey.findProgramAddressSync(
       [user.publicKey.toBuffer()],
       program.programId
@@ -323,16 +365,26 @@ describe("sol-strike", () => {
         signer: program.provider.publicKey,
         program: program.programId,
         programData: programDataAccount,
+        chipMint: chipMintPDA,
+        treasury: treasuryPDA,
+        treasuryChipTokenAccount: treasuryChipTokenAccount,
         firstPlaceClaimableRewardsAccount: firstPlaceClaimableRewardsPda,
         firstPlaceAuthority: user.publicKey,
         secondPlaceClaimableRewardsAccount: null,
         secondPlaceAuthority: null, 
-        thirdPlaceClaimableRewardsAccount: null,
-        thirdPlaceAuthority: null,
+        thirdPlaceClaimableRewardsAccount: thirdPlaceClaimableRewardsPda,
+        thirdPlaceAuthority: thirdPlaceAuthority.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
         systemProgram: SYSTEM_PROGRAM_ID
       })
       .signers([])
       .rpc()
+
+      const treasuryAfter = await program.account.treasury.fetch(
+        treasuryPDA
+      )
+  
+      console.log("Treasury claimable lamports before: ", treasuryAfter.claimableChips.toString())
 
       const firstPlaceClaimableRewardsAccountAfter = await program.account.claimableRewards.fetch(
         firstPlaceClaimableRewardsPda
@@ -385,6 +437,61 @@ describe("sol-strike", () => {
 
       const userChipTokenAccountAfter = await getAccount(provider.connection, userChipTokenAccountAddress, 'processed', TOKEN_2022_PROGRAM_ID);
       console.log("User chip balance after: ", userChipTokenAccountAfter.amount.toString())
+  })
+
+  it("Claim platform fees", async () => {
+    let programData = await program.provider.connection.getAccountInfo(program.programId)
+    let programDataAccount = new PublicKey(programData.data.subarray(programData.data.length - 32));
+
+    // this should already exist on devnet
+    const authorityChipTokenAccount = await createAssociatedTokenAccount(
+      program.provider.connection,
+      signer,
+      chipMintPDA,
+      program.provider.publicKey,
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    )
+
+    const treasuryBalanceBefore = await provider.connection.getBalance(treasuryPDA)
+    console.log("Treasury lamport balance before: ", treasuryBalanceBefore)
+
+    const authrorityBalanceBefore = await provider.connection.getBalance(program.provider.publicKey)
+    console.log("Authority lamport balance before: ", authrorityBalanceBefore)
+
+    const treasuryChipTokenAccountBefore = await getAccount(provider.connection, treasuryChipTokenAccount, 'processed', TOKEN_2022_PROGRAM_ID);
+    console.log("Treasury chip balance before: ", treasuryChipTokenAccountBefore.amount.toString())
+
+    const authorityChipTokenAccountBefore = await getAccount(provider.connection, authorityChipTokenAccount, 'processed', TOKEN_2022_PROGRAM_ID);
+    console.log("Authority chip balance before: ", authorityChipTokenAccountBefore.amount.toString())
+
+    await program.methods
+      .claimPlatformFees()
+      .accountsStrict({
+        authority: program.provider.publicKey,
+        program: program.programId,
+        programData: programDataAccount, 
+        treasury: treasuryPDA,
+        chipMint: chipMintPDA,
+        treasuryChipTokenAccount: treasuryChipTokenAccount,
+        authorityChipAccount: authorityChipTokenAccount,
+        tokenProgram: TOKEN_2022_PROGRAM_ID
+      })
+      .signers([])
+      .rpc()
+
+    
+    const treasuryBalanceAfter = await provider.connection.getBalance(treasuryPDA)
+    console.log("Treasury lamport balance after: ", treasuryBalanceAfter)
+
+    const authrorityBalanceAfter = await provider.connection.getBalance(program.provider.publicKey)
+    console.log("Authority lamport balance after: ", authrorityBalanceAfter)
+
+    const treasuryChipTokenAccountAfter = await getAccount(provider.connection, treasuryChipTokenAccount, 'processed', TOKEN_2022_PROGRAM_ID);
+    console.log("Treasury chip balance after: ", treasuryChipTokenAccountAfter.amount.toString())
+
+    const authorityChipTokenAccountAfter = await getAccount(provider.connection, authorityChipTokenAccount, 'processed', TOKEN_2022_PROGRAM_ID);
+    console.log("Authority chip balance after: ", authorityChipTokenAccountAfter.amount.toString())
   })
 
   async function airdropLamports(address: PublicKey, amount: number) {

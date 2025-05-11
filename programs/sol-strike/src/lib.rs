@@ -27,23 +27,25 @@ pub mod sol_strike {
 
     pub fn buy_chip_with_sol(ctx: Context<BuyChipWithSol>, amount: u64) -> Result<()> {
         let global_config = &ctx.accounts.global_config;
-
+        let treasury = &mut ctx.accounts.treasury;
         let chip_price = global_config.lamports_chip_price;
 
         let mut total_payment = chip_price.checked_mul(amount).ok_or(Errors::Overflow)?;
         total_payment = total_payment
             .checked_div(10_u64.checked_pow(CHIP_DECIMALS as u32).unwrap())
             .ok_or(Errors::Overflow)?;
-        total_payment = apply_fee(total_payment, true)?;
+        let total_payment_with_fee = apply_fee(total_payment, true)?;
+
+        treasury.claimable_lamports += total_payment_with_fee - total_payment;
 
         let transfer_cpi_ctx = CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
             system_program::Transfer {
                 from: ctx.accounts.buyer.to_account_info(),
-                to: ctx.accounts.treasury.to_account_info(),
+                to: treasury.to_account_info(),
             },
         );
-        system_program::transfer(transfer_cpi_ctx, total_payment)?;
+        system_program::transfer(transfer_cpi_ctx, total_payment_with_fee)?;
 
         let chip_mint_seeds: &[&[u8]] = &[b"CHIP_MINT", &[ctx.bumps.chip_mint]];
         let signer_seeds: &[&[&[u8]]] = &[chip_mint_seeds];
@@ -63,6 +65,7 @@ pub mod sol_strike {
 
     pub fn sell_chip(ctx: Context<SellChip>, amount: u64) -> Result<()> {
         let global_config = &ctx.accounts.global_config;
+        let treasury = &mut ctx.accounts.treasury;
 
         let chip_price = global_config.lamports_chip_price;
 
@@ -71,13 +74,9 @@ pub mod sol_strike {
             .checked_div(10_u64.checked_pow(CHIP_DECIMALS as u32).unwrap())
             .ok_or(Errors::Overflow)?;
 
-        msg!("BEFORE");
-        msg!("{:?}", total_payment);
+        let total_payment_with_fee = apply_fee(total_payment, false)?;
 
-        total_payment = apply_fee(total_payment, false)?;
-
-        msg!("AFTER");
-        msg!("{:?}", total_payment);
+        treasury.claimable_lamports += total_payment - total_payment_with_fee;
 
         let burn_cpi_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -89,9 +88,7 @@ pub mod sol_strike {
         );
         token_interface::burn(burn_cpi_ctx, amount)?;
 
-        **ctx
-            .accounts
-            .treasury
+        **treasury
             .to_account_info()
             .try_borrow_mut_lamports()? -= total_payment;
         **ctx
@@ -139,23 +136,48 @@ pub mod sol_strike {
     // updates the state of the ClaimableRewards PDA (how many chips can a user claim)
     // user will have a label to see how many chips can he claim and a button to claim
     pub fn set_claimable_rewards(ctx: Context<SetClaimableRewards>) -> Result<()> {
+        let treasury = &mut ctx.accounts.treasury;
         let first_place_claimable_rewards = &mut ctx.accounts.first_place_claimable_rewards_account;
 
         let multiplier = 10_i32.checked_pow(CHIP_DECIMALS as u32).unwrap() as f64;
 
         first_place_claimable_rewards.amount += (FIRST_PRIZE * multiplier) as u64;
 
+        let mut burn_amount: u64 = 0;
+
         if let Some(second_place_claimable_rewards) =
             ctx.accounts.second_place_claimable_rewards_account.as_mut()
         {
             second_place_claimable_rewards.amount += (SECOND_PRIZE * multiplier) as u64;
+        } else {
+            burn_amount += (SECOND_PRIZE * multiplier) as u64;
         }
 
         if let Some(third_place_claimable_rewards) =
             ctx.accounts.third_place_claimable_rewards_account.as_mut()
         {
             third_place_claimable_rewards.amount += (THIRD_PRIZE * multiplier) as u64;
+        } else {
+            burn_amount += (THIRD_PRIZE * multiplier) as u64;
         }
+
+        if burn_amount != 0 {
+            let treasury_seeds: &[&[u8]] = &[b"TREASURY", &[treasury.bump]];
+            let signer_seeds: &[&[&[u8]]] = &[treasury_seeds];
+
+            let burn_cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Burn {
+                    from: ctx.accounts.treasury_chip_token_account.to_account_info(),
+                    authority: treasury.to_account_info(),
+                    mint: ctx.accounts.chip_mint.to_account_info(),
+                },
+                signer_seeds,
+            );
+            token_interface::burn(burn_cpi_ctx, burn_amount)?;
+        }
+
+        treasury.claimable_chips += (TREASURY_PRIZE * multiplier) as u64;
 
         Ok(())
     }
@@ -193,6 +215,46 @@ pub mod sol_strike {
 
         Ok(())
     }
+
+    pub fn claim_platform_fees(ctx: Context<ClaimPlatfromFees>)-> Result<()> {
+        let treasury = &mut ctx.accounts.treasury;
+
+        let treasury_seeds: &[&[u8]] = &[b"TREASURY", &[treasury.bump]];
+
+        let signer_seeds: &[&[&[u8]]] = &[treasury_seeds];
+
+        // claim chips
+        let transfer_checked_cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            TransferChecked {
+                from: ctx.accounts.treasury_chip_token_account.to_account_info(),
+                to: ctx.accounts.authority_chip_account.to_account_info(),
+                authority: treasury.to_account_info(),
+                mint: ctx.accounts.chip_mint.to_account_info(),
+            },
+            signer_seeds,
+        );
+        token_interface::transfer_checked(
+            transfer_checked_cpi_ctx,
+            treasury.claimable_chips,
+            ctx.accounts.chip_mint.decimals,
+        )?;
+
+        // claim lamports
+        **treasury
+            .to_account_info()
+            .try_borrow_mut_lamports()? -= treasury.claimable_lamports;
+        **ctx
+            .accounts
+            .authority
+            .to_account_info()
+            .try_borrow_mut_lamports()? += treasury.claimable_lamports;
+
+        treasury.claimable_chips = 0;
+        treasury.claimable_lamports = 0;
+
+        Ok(())
+    }
 }
 
 #[account]
@@ -211,7 +273,8 @@ pub struct ClaimableRewards {
 #[account]
 #[derive(InitSpace)]
 pub struct Treasury {
-    pub claimable: u64,
+    pub claimable_lamports: u64,
+    pub claimable_chips: u64,
     pub bump: u8,
 }
 
@@ -365,6 +428,26 @@ pub struct SetClaimableRewards<'info> {
     )]
     pub program_data: Account<'info, ProgramData>,
     #[account(
+        mut,
+        mint::authority = chip_mint,
+        seeds = [b"CHIP_MINT"],
+        bump
+    )]
+    pub chip_mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut, 
+        seeds = [b"TREASURY"], 
+        bump = treasury.bump
+    )]
+    pub treasury: Account<'info, Treasury>,
+    #[account(
+        mut,
+        associated_token::authority = treasury,
+        associated_token::mint = chip_mint,
+        associated_token::token_program = token_program
+    )]
+    pub treasury_chip_token_account: InterfaceAccount<'info, TokenAccount>,
+    #[account(
         init_if_needed,
         space = ANCHOR_DISCRIMINATOR + ClaimableRewards::INIT_SPACE,
         payer = signer,
@@ -394,6 +477,7 @@ pub struct SetClaimableRewards<'info> {
     pub third_place_claimable_rewards_account: Option<Account<'info, ClaimableRewards>>,
     /// CHECK: only an address that is the recipient, no need for checking
     pub third_place_authority: Option<UncheckedAccount<'info>>,
+    pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
 
@@ -467,6 +551,47 @@ pub struct ClaimChips<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
+
+#[derive(Accounts)]
+pub struct ClaimPlatfromFees<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(
+        constraint = program.programdata_address()? == Some(program_data.key())
+    )]
+    pub program: Program<'info, SolStrike>,
+    #[account(
+        constraint = program_data.upgrade_authority_address == Some(authority.key())
+    )]
+    pub program_data: Account<'info, ProgramData>,
+    #[account(
+        mut,
+        seeds = [b"TREASURY"], 
+        bump = treasury.bump
+    )]
+    pub treasury: Account<'info, Treasury>,
+    #[account(
+        mint::authority = chip_mint,
+        seeds = [b"CHIP_MINT"],
+        bump
+    )]
+    pub chip_mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::authority = treasury,
+        associated_token::mint = chip_mint,
+        associated_token::token_program = token_program
+    )]
+    pub treasury_chip_token_account: InterfaceAccount<'info, TokenAccount>,
+    #[account(
+        mut,
+        associated_token::mint = chip_mint,
+        associated_token::authority = authority,
+        associated_token::token_program = token_program
+    )]
+    pub authority_chip_account: InterfaceAccount<'info, TokenAccount>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
 /// Applies a fee by either adding or subtracting it.
 /// Use add_fee = true for buying, false for selling
 /// when buying round up, when selling round down
