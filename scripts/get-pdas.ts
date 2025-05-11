@@ -24,8 +24,8 @@ const connection = anchor.getProvider().connection;
             : value // return everything else unchanged
         , 2));
 
-    const allChipTokenPriceState = await program.account.chipTokenPriceState.all();
-    console.log("\nAllChipTokenPriceState:", allChipTokenPriceState);
+    // const allChipTokenPriceState = await program.account.chipTokenPriceState.all();
+    // console.log("\nAllChipTokenPriceState:", allChipTokenPriceState);
 
     const globalConfig = await program.account.globalConfig.all();
     console.log("\nGlobal config", globalConfig.map(gc => ({
