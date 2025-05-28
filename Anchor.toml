@@ -1,5 +1,5 @@
 [toolchain]
-anchor_version = "0.31.0"
+anchor_version = "0.31.1"
 
 [features]
 resolution = true
@@ -23,9 +23,26 @@ buy-and-reserve = "npx ts-node scripts/buy-and-reserve.ts"
 get-pdas = "npx ts-node scripts/get-pdas.ts"
 init = "npx ts-node scripts/init.ts"
 decode-log = "npx ts-node scripts/decode-log.ts"
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+# test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/treasury-v2-migration.ts"
+# treasury-v2-migration = "npx ts-node scripts/treasury-v2-migration.ts"
 
 [test]
 startup_wait = 5000
 shutdown_wait = 2000
 upgradeable = true
+
+[test.validator]
+url = "https://api.devnet.solana.com"
+
+# Treasury
+[[test.validator.clone]]
+address = "8rfU35CGq9PTjhUUibKSbWZWdoCKULDWtgv7VajDyXeu"
+
+# Global Config
+[[test.validator.clone]]
+address = "Gz2gv9RukAWxXGZ1HouXEJp9tujzZL1bkzMJBreTZDEz"
+
+# Chip Mint
+[[test.validator.clone]]
+address = "GpdTpV4zo81WdEYjSReA3iJYUkESd9pbXGU65SAxTQcq"

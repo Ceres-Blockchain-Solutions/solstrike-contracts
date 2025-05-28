@@ -12,6 +12,8 @@ declare_id!("F7Dr4bH5knKjzBj8fuRJT9QGtHLyQSWTnWxYetHDnWHA");
 
 #[program]
 pub mod sol_strike {
+    use anchor_lang::solana_program::{program::invoke, system_instruction};
+
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>, lamports_price: u64) -> Result<()> {
@@ -251,6 +253,47 @@ pub mod sol_strike {
 
         Ok(())
     }
+
+    pub fn migrate_treasury_to_v2(ctx: Context<MigrateTreasuryToV2>) -> Result<()> {
+        let treasury = &mut ctx.accounts.treasury;
+        let new_treasury_size = ANCHOR_DISCRIMINATOR + Treasury::INIT_SPACE;
+
+        if treasury.data_len() == new_treasury_size {
+            return err!(Errors::TreasuryAlreadyMigratedToV2);
+        }
+
+        let rent = Rent::get()?;
+        let new_minimum_balance = rent.minimum_balance(new_treasury_size);
+
+        let lamports_diff = new_minimum_balance.saturating_sub(treasury.lamports());
+        invoke(
+            &system_instruction::transfer(
+                &ctx.accounts.signer.key(),
+                &treasury.key(),
+                lamports_diff,
+            ),
+            &[
+                ctx.accounts.signer.to_account_info(),
+                treasury.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        treasury.realloc(new_treasury_size, false)?;
+
+        let mut treasury_account_data = treasury.try_borrow_mut_data()?;
+
+        let new_treasury = Treasury {
+            claimable_lamports: 0,
+            claimable_chips: 0,
+            bump: treasury_account_data[ANCHOR_DISCRIMINATOR],
+        };
+        let new_treasury_vec = new_treasury.try_to_vec()?;
+
+        treasury_account_data[8..new_treasury_vec.len() + 8].copy_from_slice(&new_treasury_vec);
+
+        Ok(())
+    }
 }
 
 #[account]
@@ -461,7 +504,7 @@ pub struct SetClaimableRewards<'info> {
         bump
     )]
     pub second_place_claimable_rewards_account: Option<Account<'info, ClaimableRewards>>,
-    /// CHECK: only an address that is the recipient, no need for checking
+    /// CHECK: only an address thatJ is the recipient, no need for checking
     pub second_place_authority: Option<UncheckedAccount<'info>>,
     #[account(
         init_if_needed,
@@ -587,6 +630,22 @@ pub struct ClaimPlatfromFees<'info> {
     pub authority_chip_account: InterfaceAccount<'info, TokenAccount>,
     pub token_program: Interface<'info, TokenInterface>,
 }
+
+#[derive(Accounts)]
+pub struct MigrateTreasuryToV2<'info> {
+    pub signer: Signer<'info>,
+
+    /// CHECK: Manual check implemented in the instruction
+    #[account(
+        mut,
+        seeds = [b"TREASURY"], 
+        bump,
+    )]
+    pub treasury: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
 /// Applies a fee by either adding or subtracting it.
 /// Use add_fee = true for buying, false for selling
 /// when buying round up, when selling round down
@@ -628,4 +687,5 @@ pub enum Errors {
     Overflow,
     MissingSecondPlaceAccount,
     MissingThirdPlaceAccount,
+    TreasuryAlreadyMigratedToV2,
 }
